@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function AnalysisResult() {
   const { caseState } = useCase();
@@ -28,7 +29,9 @@ export default function AnalysisResult() {
         severity: severityStr,
         severityColor,
         severityText,
-        description: 'Requires intervention to prevent permanent tissue damage.',
+        description:
+          caseState.summary ||
+          "Review supporting evidence and follow safe next steps. Consult a veterinarian when uncertain.",
         confidence: caseState.confidence || 92,
       };
     }
@@ -54,7 +57,17 @@ export default function AnalysisResult() {
         confidence: 85,
       };
     }
-    
+    if (caseState.animalType === 'dog') {
+      return {
+        condition: 'Canine parvovirus (differential)',
+        severity: 'ORANGE (HIGH)',
+        severityColor: 'bg-[var(--color-tertiary)]',
+        severityText: 'text-[var(--color-on-tertiary)]',
+        description: 'Seek prompt veterinary assessment; keep other pets isolated if infectious signs are suspected.',
+        confidence: 88,
+      };
+    }
+
     // Default Pig
     return {
       condition: 'Swine Erysipelas',
@@ -76,18 +89,20 @@ export default function AnalysisResult() {
           <Link href="/guided-inspection" className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
             arrow_back
           </Link>
-          <h1 className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl">
-            Dr Segg
-          </h1>
+          <AppLogo href="/" size={104} />
         </div>
-        <button className="material-symbols-outlined text-[#414941] dark:text-stone-400 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
+        <Link
+          href="/profile"
+          className="material-symbols-outlined text-[#414941] dark:text-stone-400 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150"
+          aria-label="Settings"
+        >
           settings
-        </button>
+        </Link>
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-8 space-y-8 pb-32">
         {/* Hero Analysis Result */}
-        <section className="bg-[var(--color-surface-container-lowest)] p-8 rounded-xl shadow-[0px_12px_32px_rgba(44,105,78,0.08)] space-y-6">
+        <Link href="/treatment-options" className="bg-[var(--color-surface-container-lowest)] p-8 rounded-xl shadow-[0px_12px_32px_rgba(44,105,78,0.08)] space-y-6 block cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99] transition-all">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-sm font-bold text-[var(--color-primary)] bg-[var(--color-primary-fixed)] px-4 py-1 rounded-full uppercase tracking-widest">
@@ -121,60 +136,60 @@ export default function AnalysisResult() {
               {diagnosis.description}
             </p>
           </div>
-        </section>
+        </Link>
 
         {/* Why this might be the case */}
         <section className="space-y-4">
-          <h3 className="font-headline text-xl font-bold text-[var(--color-on-surface)] px-2">
+          <Link href="/guided-inspection" className="font-headline text-xl font-bold text-[var(--color-on-surface)] px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit">
             Clinical Observations
-          </h3>
+          </Link>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4">
+            <button type="button" className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4 cursor-pointer hover:opacity-90 text-left w-full active:scale-[0.99]">
               <span className="material-symbols-outlined text-[var(--color-tertiary)] text-3xl">thermometer</span>
               <div>
                 <div className="font-bold text-[var(--color-on-surface)]">Elevated Temp</div>
                 <div className="text-sm text-[var(--color-on-surface-variant)]">104.2°F Detected</div>
               </div>
-            </div>
-            <div className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4">
+            </button>
+            <button type="button" className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4 cursor-pointer hover:opacity-90 text-left w-full active:scale-[0.99]">
               <span className="material-symbols-outlined text-[var(--color-tertiary)] text-3xl">potted_plant</span>
               <div>
                 <div className="font-bold text-[var(--color-on-surface)]">Pasture Factor</div>
                 <div className="text-sm text-[var(--color-on-surface-variant)]">Wet lowland conditions</div>
               </div>
-            </div>
-            <div className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4">
+            </button>
+            <button type="button" className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4 cursor-pointer hover:opacity-90 text-left w-full active:scale-[0.99]">
               <span className="material-symbols-outlined text-[var(--color-tertiary)] text-3xl">footprint</span>
               <div>
                 <div className="font-bold text-[var(--color-on-surface)]">Limb Swelling</div>
                 <div className="text-sm text-[var(--color-on-surface-variant)]">Interdigital inflammation</div>
               </div>
-            </div>
-            <div className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4">
+            </button>
+            <button type="button" className="bg-[var(--color-surface-container-high)] p-6 rounded-lg flex items-center gap-4 cursor-pointer hover:opacity-90 text-left w-full active:scale-[0.99]">
               <span className="material-symbols-outlined text-[var(--color-tertiary)] text-3xl">monitor_weight</span>
               <div>
                 <div className="font-bold text-[var(--color-on-surface)]">Weight Loss</div>
                 <div className="text-sm text-[var(--color-on-surface-variant)]">Decreased grazing pattern</div>
               </div>
-            </div>
+            </button>
           </div>
         </section>
 
         {/* Action Image */}
-        <div className="w-full h-48 rounded-xl overflow-hidden shadow-sm relative">
+        <Link href="/treatment-options" className="w-full h-48 rounded-xl overflow-hidden shadow-sm relative block cursor-pointer active:scale-[0.99]">
           <Image
             alt="Vet examining hoof"
             className="object-cover"
             fill
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjex3HGZcmm8xIm8E9iUpN6nuh4nYBKcK0MUc6TwNlFIe2aslaPdkhmSqEQV8tb3bQARnLFVneNcWYY3VUhJIsikWLmK9c6AZRsUa3If14xdewYk_zQMrMFFfuIbuCdwxalfIwZmzgzs4N1e5nULG9tY32LlBolq0O3GEsvY4OfFDlX9xnhP_Y_2FXvUhgdjLeaHhaYtolMzXPA2-03WwaiXe9XhJPhDEYiLxe96rwiXhOcuS8qEBJLAOtHhrtdFMYSOekV6LpPSo"
           />
-        </div>
+        </Link>
 
         {/* What to do now */}
         <section className="space-y-6">
-          <h3 className="font-headline text-xl font-bold text-[var(--color-on-surface)] px-2">
+          <Link href="/treatment-options" className="font-headline text-xl font-bold text-[var(--color-on-surface)] px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit">
             Immediate Protocol
-          </h3>
+          </Link>
           <div className="space-y-4">
             <Link href="/treatment-options" className="w-full bg-gradient-to-r from-[#0f5238] to-[#2d6a4f] text-white py-6 px-8 rounded-xl flex items-center justify-between shadow-[0px_12px_32px_rgba(44,105,78,0.15)] active:scale-95 transition-all">
               <div className="flex items-center gap-4">
@@ -186,7 +201,10 @@ export default function AnalysisResult() {
               </div>
               <span className="material-symbols-outlined">chevron_right</span>
             </Link>
-            <button className="w-full bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)] py-6 px-8 rounded-xl flex items-center justify-between active:scale-95 transition-all">
+            <button
+              type="button"
+              className="w-full bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)] py-6 px-8 rounded-xl flex items-center justify-between active:scale-95 transition-all cursor-pointer"
+            >
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-3xl text-[var(--color-primary)]">call</span>
                 <div className="text-left">
@@ -196,10 +214,10 @@ export default function AnalysisResult() {
               </div>
               <span className="material-symbols-outlined">chevron_right</span>
             </button>
-            <button className="w-full border-2 border-[var(--color-primary)]/20 text-[var(--color-primary)] py-4 px-8 rounded-xl font-bold flex items-center justify-center gap-2 active:bg-[var(--color-primary)]/5">
+            <Link href="/records" className="w-full border-2 border-[var(--color-primary)]/20 text-[var(--color-primary)] py-4 px-8 rounded-xl font-bold flex items-center justify-center gap-2 active:bg-[var(--color-primary)]/5 cursor-pointer">
               <span className="material-symbols-outlined">description</span>
               Log to Animal Records
-            </button>
+            </Link>
           </div>
         </section>
       </main>

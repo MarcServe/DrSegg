@@ -25,7 +25,7 @@ export default function BottomNavBar() {
           <Link
             key={item.name}
             href={item.href}
-            className={`flex flex-col items-center justify-center px-4 py-2 hover:opacity-80 transition-opacity ${
+            className={`flex flex-col items-center justify-center px-4 py-2 hover:opacity-80 transition-opacity cursor-pointer active:scale-95 ${
               isActive 
                 ? "bg-[#2d6a4f] text-white rounded-full px-5 shadow-lg" 
                 : "text-[#414941] dark:text-stone-400"

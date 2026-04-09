@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function GuidedInspection() {
   return (
@@ -11,16 +12,22 @@ export default function GuidedInspection() {
           <Link href="/health-status" className="p-2 rounded-full hover:bg-[#e2e3df] transition-colors active:scale-95 duration-150">
             <span className="material-symbols-outlined text-[#0f5238]">close</span>
           </Link>
-          <h1 className="font-manrope text-xl font-bold tracking-tight text-[#0f5238]">Dr Segg</h1>
+          <AppLogo href="/" size={104} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[#414941]">settings</span>
+          <Link
+            href="/profile"
+            className="material-symbols-outlined text-[#414941] p-2 rounded-full hover:bg-[#e2e3df] cursor-pointer active:scale-95"
+            aria-label="Settings"
+          >
+            settings
+          </Link>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pb-32 pt-6">
         {/* Progress Indicator */}
-        <div className="mb-10 px-2">
+        <Link href="/analysis-result" className="mb-10 px-2 block cursor-pointer active:scale-[0.99]">
           <div className="flex justify-between items-end mb-3">
             <div>
               <p className="text-[var(--color-on-surface-variant)] font-label text-sm font-bold uppercase tracking-widest">
@@ -42,12 +49,12 @@ export default function GuidedInspection() {
               style={{ width: "40%" }}
             ></div>
           </div>
-        </div>
+        </Link>
 
         {/* Main Inspection Content Canvas */}
         <section className="space-y-8">
           {/* Step Card */}
-          <div className="bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.08)] relative overflow-hidden">
+          <button type="button" className="w-full bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.08)] relative overflow-hidden text-left cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99]">
             {/* Tonal layering background element */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-primary-fixed)]/20 rounded-bl-[5rem] -mr-8 -mt-8"></div>
             <div className="relative z-10">
@@ -89,17 +96,17 @@ export default function GuidedInspection() {
                 </p>
               </div>
             </div>
-          </div>
+          </button>
 
           {/* Action Area: The Pulse */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link href="/analysis-result" className="flex items-center justify-center gap-3 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white py-6 px-8 rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-all group">
+            <Link href="/analysis-result" className="flex items-center justify-center gap-3 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white py-6 px-8 rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-all group cursor-pointer">
               <span className="material-symbols-outlined text-3xl group-active:scale-110 transition-transform">
                 photo_camera
               </span>
               <span className="font-headline font-bold text-lg">Take Photo</span>
             </Link>
-            <button className="flex items-center justify-center gap-3 bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface-variant)] py-6 px-8 rounded-full active:scale-95 transition-all group">
+            <button type="button" className="flex items-center justify-center gap-3 bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface-variant)] py-6 px-8 rounded-full active:scale-95 transition-all group cursor-pointer w-full md:w-auto">
               <span className="material-symbols-outlined text-3xl">videocam</span>
               <span className="font-headline font-bold text-lg">Record Video</span>
             </button>
@@ -107,7 +114,7 @@ export default function GuidedInspection() {
 
           {/* Skip/Manual Note Link */}
           <div className="text-center pt-4">
-            <button className="text-[var(--color-on-surface-variant)] font-bold text-sm uppercase tracking-widest hover:text-[var(--color-primary)] transition-colors">
+            <button type="button" className="text-[var(--color-on-surface-variant)] font-bold text-sm uppercase tracking-widest hover:text-[var(--color-primary)] transition-colors cursor-pointer">
               Add Text Note Instead
             </button>
           </div>

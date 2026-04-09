@@ -16,6 +16,10 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Dr Segg",
   description: "AI Livestock Health Assistant",
+  icons: {
+    icon: "/dr-morgees-logo.png",
+    apple: "/dr-morgees-logo.png",
+  },
 };
 
 export default function RootLayout({

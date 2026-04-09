@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function HealthStatus() {
   const { caseState } = useCase();
@@ -63,27 +64,37 @@ export default function HealthStatus() {
           <Link href="/new-case" className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
-          <h1 className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl">
-            Dr Segg
-          </h1>
+          <AppLogo href="/" size={104} />
         </div>
-        <button className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
+        <Link
+          href="/profile"
+          className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150"
+          aria-label="Settings"
+        >
           <span className="material-symbols-outlined">settings</span>
-        </button>
+        </Link>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
         {/* Status Badge Hero Section */}
-        <section className="relative overflow-hidden rounded-xl bg-[var(--color-surface-container-lowest)] p-8 text-center space-y-4">
+        <Link href="/analysis-result" className="relative overflow-hidden rounded-xl bg-[var(--color-surface-container-lowest)] p-8 text-center space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-low)] transition-colors active:scale-[0.99]">
           <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full font-headline font-bold text-lg ${config.color}`}>
             <span className="material-symbols-outlined filled-icon">{config.icon}</span>
             {config.label}
           </div>
           <div className="space-y-1">
-            <p className="text-[var(--color-on-surface-variant)] font-medium">Animal ID: #8829 - &quot;Bessie&quot;</p>
+            <p className="text-[var(--color-on-surface-variant)] font-medium">
+              {caseState.animalType ? caseState.animalType.charAt(0).toUpperCase() + caseState.animalType.slice(1) : "Animal"}{" "}
+              case
+            </p>
             <h2 className="text-3xl font-headline font-extrabold text-[var(--color-on-surface)]">
               {config.title}
             </h2>
+            {caseState.summary && (
+              <p className="text-sm text-left text-[var(--color-on-surface-variant)] pt-2 max-w-prose mx-auto leading-relaxed">
+                {caseState.summary}
+              </p>
+            )}
           </div>
           {/* Confidence Level Indicator */}
           <div className="pt-4 space-y-2 max-w-xs mx-auto">
@@ -95,12 +106,52 @@ export default function HealthStatus() {
               <div className="h-full bg-[var(--color-primary)] rounded-full" style={{ width: `${caseState.confidence}%` }}></div>
             </div>
           </div>
-        </section>
+        </Link>
+
+        {caseState.escalationSuggested && (
+          <div className="rounded-xl border border-[var(--color-error)] bg-[var(--color-error-container)]/30 px-4 py-3 text-sm text-[var(--color-on-error-container)]">
+            <span className="font-headline font-bold block mb-1">Escalate to a veterinarian</span>
+            Signs or risk level suggest prompt professional assessment. This app does not replace an exam.
+          </div>
+        )}
+
+        {caseState.needsMoreInfo && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-[var(--color-on-surface)]">
+            <span className="font-headline font-bold block mb-1">More information helps</span>
+            {caseState.suggestedNextChecks.length > 0 ? (
+              <ul className="list-disc pl-5 space-y-1">
+                {caseState.suggestedNextChecks.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Add detail, timeline, or clear photos/video on a new case run.</p>
+            )}
+          </div>
+        )}
+
+        {caseState.redFlags.length > 0 && (
+          <div className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container-low)] px-4 py-3 text-sm">
+            <span className="font-bold text-[var(--color-on-surface)] block mb-1">Flags to discuss with a vet</span>
+            <ul className="list-disc pl-5 space-y-1 text-[var(--color-on-surface-variant)]">
+              {caseState.redFlags.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {caseState.assessmentDisclaimer && (
+          <p className="text-xs text-[var(--color-outline)] text-center px-2">{caseState.assessmentDisclaimer}</p>
+        )}
 
         {/* Bento Grid Insights */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* What I See */}
-          <section className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4">
+          <Link
+            href="/analysis-result"
+            className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-high)] transition-colors active:scale-[0.99]"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[var(--color-primary-container)] flex items-center justify-center text-[var(--color-on-primary-container)]">
                 <span className="material-symbols-outlined">visibility</span>
@@ -110,10 +161,13 @@ export default function HealthStatus() {
             <p className="text-[var(--color-on-surface)] font-medium leading-relaxed">
               {config.description}
             </p>
-          </section>
+          </Link>
 
           {/* What You Reported */}
-          <section className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4">
+          <Link
+            href="/new-case"
+            className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-high)] transition-colors active:scale-[0.99]"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[var(--color-secondary-container)] flex items-center justify-center text-[var(--color-on-secondary-container)]">
                 <span className="material-symbols-outlined">edit_note</span>
@@ -131,39 +185,39 @@ export default function HealthStatus() {
                 <span className="px-3 py-1 bg-[var(--color-surface-container-highest)] rounded-full text-sm font-semibold">No symptoms reported</span>
               )}
             </div>
-          </section>
+          </Link>
         </div>
 
         {/* Monitoring Checklist */}
         <section className="bg-[var(--color-surface-container-lowest)] rounded-xl p-8 space-y-6">
-          <h3 className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2">
+          <Link href="/guided-inspection" className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2 cursor-pointer hover:text-[var(--color-primary)] w-fit">
             Monitoring Checklist
-          </h3>
+          </Link>
           <div className="space-y-4">
             {/* Checklist Item 1 */}
-            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg">
+            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">restaurant</span>
                 <span className="font-bold text-[var(--color-on-surface)]">Eating Habits</span>
               </div>
               <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </div>
+            </button>
             {/* Checklist Item 2 */}
-            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg">
+            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">water_drop</span>
                 <span className="font-bold text-[var(--color-on-surface)]">Drinking Water</span>
               </div>
               <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </div>
+            </button>
             {/* Checklist Item 3 */}
-            <div className="flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg">
+            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">directions_run</span>
                 <span className="font-bold text-[var(--color-on-surface)]">Active Movement</span>
               </div>
               <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </div>
+            </button>
           </div>
         </section>
 

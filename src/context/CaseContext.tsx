@@ -13,6 +13,15 @@ interface CaseState {
   possibleConditions: string[];
   severity: string | null;
   region: string;
+  summary: string | null;
+  needsMoreInfo: boolean;
+  missingInformation: string[];
+  redFlags: string[];
+  recommendationType: string | null;
+  suggestedNextChecks: string[];
+  assessmentDisclaimer: string | null;
+  differentialDiagnoses: { condition: string; confidence: number }[];
+  escalationSuggested: boolean;
 }
 
 interface CaseContextType {
@@ -23,6 +32,8 @@ interface CaseContextType {
   setHealthStatus: (status: HealthStatus, confidence: number) => void;
   setAnalysisResult: (conditions: string[], severity: string) => void;
   setRegion: (region: string) => void;
+  setSymptoms: (symptoms: string[]) => void;
+  setAssessmentDetails: (partial: Partial<Omit<CaseState, "caseId" | "animalType" | "symptoms">>) => void;
   resetCase: () => void;
 }
 
@@ -35,6 +46,15 @@ const initialState: CaseState = {
   possibleConditions: [],
   severity: null,
   region: "Northern Highlands District",
+  summary: null,
+  needsMoreInfo: false,
+  missingInformation: [],
+  redFlags: [],
+  recommendationType: null,
+  suggestedNextChecks: [],
+  assessmentDisclaimer: null,
+  differentialDiagnoses: [],
+  escalationSuggested: false,
 };
 
 const CaseContext = createContext<CaseContextType | undefined>(undefined);
@@ -48,6 +68,10 @@ export function CaseProvider({ children }: { children: ReactNode }) {
   const setHealthStatus = (status: HealthStatus, confidence: number) => setCaseState((prev) => ({ ...prev, healthStatus: status, confidence }));
   const setAnalysisResult = (conditions: string[], severity: string) => setCaseState((prev) => ({ ...prev, possibleConditions: conditions, severity }));
   const setRegion = (region: string) => setCaseState((prev) => ({ ...prev, region }));
+  const setSymptoms = (symptoms: string[]) =>
+    setCaseState((prev) => ({ ...prev, symptoms }));
+  const setAssessmentDetails = (partial: Partial<Omit<CaseState, "caseId" | "animalType" | "symptoms">>) =>
+    setCaseState((prev) => ({ ...prev, ...partial }));
   const resetCase = () => setCaseState(initialState);
 
   return (
@@ -60,6 +84,8 @@ export function CaseProvider({ children }: { children: ReactNode }) {
         setHealthStatus,
         setAnalysisResult,
         setRegion,
+        setSymptoms,
+        setAssessmentDetails,
         resetCase,
       }}
     >

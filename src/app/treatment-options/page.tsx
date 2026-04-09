@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AppLogo } from "@/components/AppLogo";
 
 type Treatment = {
   id: string;
@@ -17,25 +18,57 @@ type Treatment = {
   warnings: string[];
 };
 
+function mapApiTreatment(
+  t: {
+    drug_name: string;
+    generic_name?: string | null;
+    dosage_text?: string | null;
+    prescription_required?: boolean | null;
+    supportive_care?: string | null;
+  },
+  region: string
+): Treatment {
+  return {
+    id: t.drug_name,
+    active_ingredient: t.generic_name || "",
+    brands: [t.drug_name],
+    region,
+    availability: t.prescription_required ? "Vet Required" : "OTC",
+    dosage: t.dosage_text || "Per product label or veterinarian",
+    withdrawal_period: "Per label / regulatory rules",
+    warnings: t.supportive_care ? [t.supportive_care] : [],
+  };
+}
+
 export default function TreatmentOptions() {
   const { caseState } = useCase();
   const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [apiWarnings, setApiWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchTreatments = async () => {
       try {
-        const response = await fetch('/api/treatment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/api/treatment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             region: caseState.region,
-            condition: caseState.possibleConditions[0] || 'Foot Rot',
+            condition: caseState.possibleConditions[0] || "",
+            species: caseState.animalType || "poultry",
             caseId: caseState.caseId,
           }),
         });
         const data = await response.json();
-        setTreatments(data.treatments || []);
+        const raw = (data.treatments || []) as {
+          drug_name: string;
+          generic_name?: string | null;
+          dosage_text?: string | null;
+          prescription_required?: boolean | null;
+          supportive_care?: string | null;
+        }[];
+        setTreatments(raw.map((t) => mapApiTreatment(t, caseState.region)));
+        setApiWarnings(data.warnings || []);
       } catch (error) {
         console.error("Failed to fetch treatments:", error);
       } finally {
@@ -54,14 +87,16 @@ export default function TreatmentOptions() {
           <Link href="/analysis-result" className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 cursor-pointer active:scale-95 duration-150">
             arrow_back
           </Link>
-          <span className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl">
-            Dr Segg
-          </span>
+          <AppLogo href="/" size={104} />
         </div>
         <div className="flex items-center gap-4">
-          <span className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 cursor-pointer active:scale-95 duration-150">
+          <Link
+            href="/profile"
+            className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 cursor-pointer active:scale-95 duration-150 hover:bg-[#e2e3df] dark:hover:bg-stone-800 rounded-full p-2"
+            aria-label="Settings"
+          >
             settings
-          </span>
+          </Link>
         </div>
       </header>
 
@@ -69,23 +104,32 @@ export default function TreatmentOptions() {
         {/* Region Selector & Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div className="flex-1">
-            <div className="inline-flex items-center gap-2 bg-[var(--color-primary-container)]/10 px-4 py-1.5 rounded-full text-[var(--color-primary)] mb-4">
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-2 bg-[var(--color-primary-container)]/10 px-4 py-1.5 rounded-full text-[var(--color-primary)] mb-4 cursor-pointer hover:opacity-90 active:scale-[0.99]"
+            >
               <span className="material-symbols-outlined text-sm filled-icon">location_on</span>
               <span className="font-label text-sm font-bold uppercase tracking-wider">
                 {caseState.region}
               </span>
-            </div>
+            </Link>
             <h1 className="font-headline text-4xl font-extrabold tracking-tight text-[var(--color-on-surface)]">
               Available treatment options in your region
             </h1>
           </div>
-          <button className="flex items-center gap-2 bg-[var(--color-surface-container-highest)] px-6 py-4 rounded-xl hover:bg-[#e2e3df] transition-colors active:scale-95 duration-150">
+          <button type="button" className="flex items-center gap-2 bg-[var(--color-surface-container-highest)] px-6 py-4 rounded-xl hover:bg-[#e2e3df] transition-colors active:scale-95 duration-150 cursor-pointer">
             <span className="material-symbols-outlined text-[var(--color-primary)]">distance</span>
             <span className="font-label font-bold text-[var(--color-on-surface-variant)]">Change Region</span>
           </button>
         </div>
 
         {/* Treatment Bento Grid */}
+        {apiWarnings.length > 0 && (
+          <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm text-[var(--color-on-surface)]">
+            {apiWarnings.join(" ")}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--color-primary)]"></div>
@@ -94,7 +138,10 @@ export default function TreatmentOptions() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8">
             {/* Treatment Card 1 (Large Feature) */}
             {treatments.length > 0 && (
-              <div className="lg:col-span-7 bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.05)] border border-[var(--color-outline-variant)]/15 flex flex-col gap-6">
+              <Link
+                href="/follow-up"
+                className="lg:col-span-7 bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.05)] border border-[var(--color-outline-variant)]/15 flex flex-col gap-6 cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99] transition-all"
+              >
                 <div className="flex flex-col md:flex-row gap-8">
                   <div className="w-full md:w-1/3 aspect-square rounded-lg overflow-hidden bg-[var(--color-surface-container)] relative">
                     <Image
@@ -136,7 +183,7 @@ export default function TreatmentOptions() {
                     </span>
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-full bg-[var(--color-primary-container)] flex items-center justify-center text-white font-headline text-xl font-bold">
-                        {treatments[0].dosage.split(' ')[0].replace(/\D/g,'')}
+                        {treatments[0].dosage.replace(/\D/g, "").slice(0, 2) || "—"}
                       </div>
                       <div>
                         <div className="font-bold text-[var(--color-on-surface)]">{treatments[0].dosage}</div>
@@ -154,12 +201,15 @@ export default function TreatmentOptions() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             )}
 
             {/* Treatment Card 2 (Secondary) */}
             {treatments.length > 1 && (
-              <div className="lg:col-span-5 bg-[var(--color-surface-container)] rounded-xl p-8 flex flex-col justify-between">
+              <Link
+                href="/follow-up"
+                className="lg:col-span-5 bg-[var(--color-surface-container)] rounded-xl p-8 flex flex-col justify-between cursor-pointer hover:opacity-95 active:scale-[0.99]"
+              >
                 <div>
                   <div className="flex justify-between items-start mb-6">
                     <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-white shadow-sm relative">
@@ -194,11 +244,14 @@ export default function TreatmentOptions() {
                     {treatments[1].warnings[0]}
                   </p>
                 </div>
-              </div>
+              </Link>
             )}
 
             {/* Treatment Card 3 (Status Alert Style) */}
-            <div className="lg:col-span-4 bg-[var(--color-surface-container-lowest)] rounded-xl p-6 shadow-sm border border-[var(--color-outline-variant)]/10">
+            <Link
+              href="/follow-up"
+              className="lg:col-span-4 bg-[var(--color-surface-container-lowest)] rounded-xl p-6 shadow-sm border border-[var(--color-outline-variant)]/10 block cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99]"
+            >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-headline font-bold text-[var(--color-primary)]">FlyShield Spray</h3>
                 <span className="material-symbols-outlined text-[var(--color-primary-container)]">bug_report</span>
@@ -221,10 +274,13 @@ export default function TreatmentOptions() {
               <div className="text-[10px] uppercase font-bold text-[var(--color-outline)] text-center">
                 Topical Application Only
               </div>
-            </div>
+            </Link>
 
             {/* Treatment Card 4 (Small High Contrast) */}
-            <div className="lg:col-span-8 bg-[var(--color-surface-container-high)] rounded-xl p-8 flex flex-col md:flex-row gap-8 items-center">
+            <Link
+              href="/follow-up"
+              className="lg:col-span-8 bg-[var(--color-surface-container-high)] rounded-xl p-8 flex flex-col md:flex-row gap-8 items-center cursor-pointer hover:opacity-95 active:scale-[0.99]"
+            >
               <div className="flex-1">
                 <div className="inline-block bg-[var(--color-tertiary-container)] text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-3">
                   Critical Support
@@ -264,7 +320,7 @@ export default function TreatmentOptions() {
                   <p className="text-[10px] text-[var(--color-outline)] uppercase font-bold">Per incident</p>
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
         )}
 

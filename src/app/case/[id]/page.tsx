@@ -1,70 +1,160 @@
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import BottomNavBar from "@/components/BottomNavBar";
+import { createClient } from "@/lib/supabase/server";
 
-export default function CaseDetail({ params }: { params: { id: string } }) {
-  // Mock data for case detail
-  const mockCase = {
-    id: params.id,
-    animal: "Bessie (Cow)",
-    type: "Post-Natal Check",
-    status: "Stable",
-    statusColor: "bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed-variant)]",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuD0bT2yT4JLfFfg-uUKJDYOX5-RxM1idnEmsaY3sQIQfCA6_lJnA9vUXLVw9jEt5Vh3v-ur5iUhtT3uM8cvhiQKUcrXo0dJX0_ZA13CaDFePYwptSjXfWf_mQYXUWOkuuTUev3rrnH7GcfczLcLOITw13ZyJEBxtBNR5VlDqYzARacqhHpk2u1p3ysfHkdwjS1SfmqfPvUbdP9ejH4Aqu6yWlq75xGuVohJyByOryay-sHb1VddWZEQ3rxTEDThtFALpNB8miY-r9k",
-    date: "Today",
-    timeline: [
-      { day: "Today", desc: "Swelling reduced, appetite normal", status: "Improving" },
-      { day: "Yesterday", desc: "Administered antibiotics", status: "Unchanged" },
-      { day: "2 days ago", desc: "Initial report: Lethargy", status: "Worsening" }
-    ]
+const PLACEHOLDER =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuD0bT2yT4JLfFfg-uUKJDYOX5-RxM1idnEmsaY3sQIQfCA6_lJnA9vUXLVw9jEt5Vh3v-ur5iUhtT3uM8cvhiQKUcrXo0dJX0_ZA13CaDFePYwptSjXfWf_mQYXUWOkuuTUev3rrnH7GcfczLcLOITw13ZyJEBxtBNR5VlDqYzARacqhHpk2u1p3ysfHkdwjS1SfmqfPvUbdP9ejH4Aqu6yWlq75xGuVohJyByOryay-sHb1VddWZEQ3rxTEDThtFALpNB8miY-r9k";
+
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function CaseDetail({ params }: PageProps) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: row, error } = await supabase
+    .from("cases")
+    .select(
+      `
+      id,
+      animal_type,
+      health_status,
+      status,
+      created_at,
+      case_analysis ( possible_conditions, severity ),
+      ai_assessments ( summary, confidence_score, recommendation_type, needs_more_info ),
+      followups ( created_at, notes, status )
+    `
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !row) {
+    notFound();
+  }
+
+  const analysis = Array.isArray(row.case_analysis)
+    ? row.case_analysis[0]
+    : row.case_analysis;
+  const aiRows = row.ai_assessments as
+    | { summary: string | null; confidence_score: number | null; recommendation_type: string | null; needs_more_info: boolean | null }[]
+    | { summary: string | null; confidence_score: number | null; recommendation_type: string | null; needs_more_info: boolean | null }
+    | null;
+  const aiAssessment = Array.isArray(aiRows) ? aiRows[0] : aiRows;
+  const followups = (Array.isArray(row.followups) ? row.followups : []) as {
+    created_at: string;
+    notes: string | null;
+    status: string | null;
+  }[];
+
+  const sortedFollowups = [...followups].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const timeline = sortedFollowups.slice(0, 5).map((f, idx) => ({
+    day:
+      idx === 0
+        ? "Latest"
+        : new Date(f.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          }),
+    desc: f.notes || "Follow-up recorded",
+    status:
+      f.status === "improving"
+        ? "Improving"
+        : f.status === "worsening"
+          ? "Worsening"
+          : "Unchanged",
+  }));
+
+  if (timeline.length === 0) {
+    timeline.push({
+      day: "Start",
+      desc: `Case opened — ${row.animal_type}`,
+      status: "Unchanged",
+    });
+  }
+
+  const badgeClass = (status: string) => {
+    if (status === "Improving")
+      return "bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed)]";
+    if (status === "Worsening")
+      return "bg-[var(--color-tertiary-fixed)] text-[var(--color-on-tertiary-fixed-variant)]";
+    return "bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)]";
   };
+
+  const subtitle =
+    aiAssessment?.summary?.slice(0, 120) ||
+    (analysis?.possible_conditions as string[] | undefined)?.[0] ||
+    row.health_status?.replace(/_/g, " ") ||
+    "Case review";
 
   return (
     <>
       <header className="bg-[#f9faf6] dark:bg-stone-950 flex justify-between items-center px-6 py-4 w-full sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <Link href="/cases" className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
+          <Link
+            href="/cases"
+            className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150"
+          >
             arrow_back
           </Link>
-          <h1 className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl">
-            Case #{mockCase.id}
-          </h1>
+          <Link
+            href="/cases"
+            className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl cursor-pointer hover:opacity-80"
+          >
+            Case #{row.id.slice(0, 8)}
+          </Link>
         </div>
       </header>
 
       <main className="px-6 mt-6 max-w-4xl mx-auto space-y-8 pb-32">
-        <section className="flex items-center gap-6 p-2">
+        <Link href="/records" className="flex items-center gap-6 p-2 cursor-pointer active:scale-[0.99]">
           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm relative">
-            <Image
-              className="object-cover"
-              alt={mockCase.animal}
-              fill
-              src={mockCase.image}
-            />
+            <Image className="object-cover" alt={row.animal_type} fill src={PLACEHOLDER} />
           </div>
           <div>
             <span className="text-xs font-bold tracking-widest uppercase text-[var(--color-outline)] mb-1 block">
-              {mockCase.date}
+              {row.created_at
+                ? new Date(row.created_at).toLocaleDateString()
+                : ""}
             </span>
-            <h2 className="text-3xl font-extrabold font-manrope text-[var(--color-primary)] tracking-tight">
-              {mockCase.animal}
+            <h2 className="text-3xl font-extrabold font-manrope text-[var(--color-primary)] tracking-tight capitalize">
+              {row.animal_type}
             </h2>
+            <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">{subtitle}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`${mockCase.statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase`}>
-                {mockCase.status}
+              <span className="bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed-variant)] px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                {row.status || "open"}
               </span>
             </div>
           </div>
-        </section>
+        </Link>
 
         <section className="space-y-6">
-          <h3 className="text-xl font-bold font-manrope px-2">Recovery Timeline</h3>
+          <Link
+            href="/follow-up"
+            className="text-xl font-bold font-manrope px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit"
+          >
+            Recovery Timeline
+          </Link>
           <div className="space-y-4">
-            {mockCase.timeline.map((item, idx) => (
-              <div key={idx} className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors">
+            {timeline.map((item, idx) => (
+              <div
+                key={idx}
+                className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors"
+              >
                 <div className="flex items-center gap-6">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${idx === 0 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)]'}`}>
-                    {mockCase.timeline.length - idx}
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${
+                      idx === 0
+                        ? "bg-[var(--color-primary)] text-white"
+                        : "bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)]"
+                    }`}
+                  >
+                    {timeline.length - idx}
                   </div>
                   <div>
                     <p className="font-bold text-lg">{item.day}</p>
@@ -72,11 +162,9 @@ export default function CaseDetail({ params }: { params: { id: string } }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className={`px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-                    item.status === 'Improving' ? 'bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed)]' :
-                    item.status === 'Worsening' ? 'bg-[var(--color-tertiary-fixed)] text-[var(--color-on-tertiary-fixed-variant)]' :
-                    'bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)]'
-                  }`}>
+                  <span
+                    className={`px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${badgeClass(item.status)}`}
+                  >
                     {item.status.toUpperCase()}
                   </span>
                 </div>
@@ -86,7 +174,10 @@ export default function CaseDetail({ params }: { params: { id: string } }) {
         </section>
 
         <div className="mt-12 text-center">
-          <Link href="/follow-up" className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150">
+          <Link
+            href="/follow-up"
+            className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150"
+          >
             <span>Add Follow-up Update</span>
             <span className="material-symbols-outlined">add</span>
           </Link>

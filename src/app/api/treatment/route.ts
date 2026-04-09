@@ -1,73 +1,77 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { fetchTreatmentsForCondition } from "@/lib/ai/treatments";
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const data = await request.json();
-    const { region, condition, caseId } = data;
-    
-    // Fallback Mock Data
-    let treatments = [
-      {
-        id: '1',
-        active_ingredient: 'Penicillin',
-        brands: ['BoviCillin XL'],
-        region: region || 'Northern Highlands District',
-        availability: 'Vet Required',
-        dosage: '15ml per 100kg',
-        withdrawal_period: '28 Days (Meat) / 7 Days (Milk)',
-        warnings: ['Requires intervention within 24 hours']
-      },
-      {
-        id: '2',
-        active_ingredient: 'Herbal Supplement',
-        brands: ['HerbaGuard Plus'],
-        region: region || 'Northern Highlands District',
-        availability: 'OTC',
-        dosage: '2 Tablets daily / 5 days',
-        withdrawal_period: 'None',
-        warnings: ['Store below 25°C']
-      }
-    ];
+    const region = (data.region as string) || "Northern Highlands District";
+    const condition = (data.condition as string) || "";
+    const conditionCodeParam = (data.condition_code as string)?.trim() || null;
+    const caseId = data.caseId as string | undefined;
+    const species = (data.species as string) || "poultry";
 
-    if (supabase) {
-      // 1. Fetch real treatments from drug_database
-      const { data: dbTreatments, error: dbError } = await supabase
-        .from('drug_database')
-        .select('*')
-        .eq('region', region);
+    let conditionCode = conditionCodeParam;
 
-      if (!dbError && dbTreatments && dbTreatments.length > 0) {
-        // Map the DB rows to our UI format
-        treatments = dbTreatments.map((drug) => ({
-          id: drug.id,
-          active_ingredient: drug.active_ingredient,
-          brands: [drug.brand_name],
-          region: drug.region,
-          availability: drug.requires_prescription ? 'Vet Required' : 'OTC',
-          dosage: 'Consult packaging or vet', // Real app would use dosage engine
-          withdrawal_period: drug.withdrawal_period || 'None',
-          warnings: []
-        }));
-      }
+    if (!conditionCode && condition) {
+      const { data: condRow } = await supabase
+        .from("knowledge_conditions")
+        .select("condition_code")
+        .ilike("condition_name", `%${condition}%`)
+        .maybeSingle();
+      conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition : null);
+    }
 
-      // 2. Save the treatment plan to the case
-      if (caseId && !caseId.startsWith('mock-case-')) {
-        await supabase.from('treatment_plans').insert({
+    const treatments = await fetchTreatmentsForCondition(supabase, {
+      conditionCode,
+      species,
+      region,
+    });
+
+    if (caseId) {
+      const { data: existing } = await supabase
+        .from("cases")
+        .select("id")
+        .eq("id", caseId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existing && treatments.length > 0) {
+        await supabase.from("treatment_plans").insert({
           case_id: caseId,
           region,
-          treatments: treatments,
-          dosage: { note: "Follow vet instructions" }
+          treatments,
+          dosage: { note: "Structured database rows — confirm with veterinarian" },
         });
       }
     }
 
+    const warnings: string[] = [];
+    if (treatments.length === 0) {
+      warnings.push(
+        "No region-specific drug rows matched this condition. Provide supportive care and consult a veterinarian for prescriptions and dosing."
+      );
+    }
+
     return NextResponse.json({
       treatments,
-      message: `Found ${treatments.length} treatments for ${condition} in ${region}.`,
+      warnings,
+      message:
+        treatments.length > 0
+          ? `Found ${treatments.length} structured option(s) for ${condition || "condition"} in ${region}.`
+          : `No database treatment rows for this lookup in ${region}.`,
     });
   } catch (error) {
     console.error("Treatment Error:", error);
-    return NextResponse.json({ error: 'Failed to fetch treatments' }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch treatments" }, { status: 500 });
   }
 }

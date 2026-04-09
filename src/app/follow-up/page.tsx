@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function FollowUp() {
   const { caseState } = useCase();
@@ -39,18 +40,22 @@ export default function FollowUp() {
           <Link href="/treatment-options" className="hover:bg-[#e2e3df] transition-colors p-2 rounded-full active:scale-95 duration-150">
             <span className="material-symbols-outlined text-[#0f5238]">arrow_back</span>
           </Link>
-          <h1 className="font-manrope text-xl font-bold tracking-tight text-[#0f5238]">Dr Segg</h1>
+          <AppLogo href="/" size={104} />
         </div>
         <div className="flex items-center gap-2">
-          <button className="hover:bg-[#e2e3df] transition-colors p-2 rounded-full active:scale-95 duration-150">
+          <Link
+            href="/profile"
+            className="hover:bg-[#e2e3df] transition-colors p-2 rounded-full active:scale-95 duration-150"
+            aria-label="Settings"
+          >
             <span className="material-symbols-outlined text-[#0f5238]">settings</span>
-          </button>
+          </Link>
         </div>
       </header>
 
       <main className="px-6 mt-6 max-w-4xl mx-auto space-y-8 pb-32">
         {/* Animal Header Profile */}
-        <section className="flex items-center gap-6 p-2">
+        <Link href="/case/1" className="flex items-center gap-6 p-2 cursor-pointer active:scale-[0.99]">
           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm relative">
             <Image
               className="object-cover"
@@ -71,12 +76,12 @@ export default function FollowUp() {
               <span className="text-sm font-semibold text-[var(--color-on-surface-variant)]">Active Treatment</span>
             </div>
           </div>
-        </section>
+        </Link>
 
         {/* Progress Bento Grid */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Overall Status Card */}
-          <div className="md:col-span-2 bg-[var(--color-surface-container-lowest)] p-8 rounded-xl flex flex-col justify-between min-h-[220px]">
+          <button type="button" className="md:col-span-2 bg-[var(--color-surface-container-lowest)] p-8 rounded-xl flex flex-col justify-between min-h-[220px] text-left cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99] transition-all w-full">
             <div>
               <h3 className="text-sm font-bold text-[var(--color-outline)] uppercase tracking-wider mb-4">
                 Current Recovery Status
@@ -98,22 +103,24 @@ export default function FollowUp() {
               <div className="h-2 w-16 bg-[var(--color-primary)] rounded-full opacity-30"></div>
               <div className="h-2 w-16 bg-[var(--color-primary)] rounded-full opacity-10"></div>
             </div>
-          </div>
+          </button>
 
           {/* Stats Card */}
-          <div className="bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] p-8 rounded-xl flex flex-col justify-center items-center text-center">
+          <button type="button" className="bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] p-8 rounded-xl flex flex-col justify-center items-center text-center cursor-pointer hover:opacity-95 active:scale-[0.99] w-full">
             <span className="material-symbols-outlined text-5xl mb-4">ecg_heart</span>
             <span className="text-4xl font-bold font-manrope">Day 3</span>
             <span className="text-sm font-medium opacity-80 mt-1 uppercase tracking-widest">Post-Treatment</span>
-          </div>
+          </button>
         </section>
 
         {/* Timeline View */}
         <section className="space-y-6">
-          <h3 className="text-xl font-bold font-manrope px-2">Recovery Timeline</h3>
+          <Link href="/case/1" className="text-xl font-bold font-manrope px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit">
+            Recovery Timeline
+          </Link>
           <div className="space-y-4">
             {/* Day 3 (Latest) */}
-            <div className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors">
+            <button type="button" className="w-full bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors text-left cursor-pointer active:scale-[0.99]">
               <div className="flex items-center gap-6">
                 <div className="w-12 h-12 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold">
                   3
@@ -129,10 +136,10 @@ export default function FollowUp() {
                 </span>
                 <span className="material-symbols-outlined text-[var(--color-outline)]">chevron_right</span>
               </div>
-            </div>
+            </button>
 
             {/* Day 2 */}
-            <div className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between opacity-80">
+            <button type="button" className="w-full bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between opacity-80 text-left cursor-pointer hover:opacity-100 active:scale-[0.99]">
               <div className="flex items-center gap-6">
                 <div className="w-12 h-12 bg-[var(--color-surface-container-highest)] rounded-full flex items-center justify-center text-[var(--color-on-surface)] font-bold">
                   2
@@ -148,10 +155,10 @@ export default function FollowUp() {
                 </span>
                 <span className="material-symbols-outlined text-[var(--color-outline)]">chevron_right</span>
               </div>
-            </div>
+            </button>
 
             {/* Day 1 */}
-            <div className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between opacity-60">
+            <button type="button" className="w-full bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between opacity-60 text-left cursor-pointer hover:opacity-80 active:scale-[0.99]">
               <div className="flex items-center gap-6">
                 <div className="w-12 h-12 bg-[var(--color-surface-container-highest)] rounded-full flex items-center justify-center text-[var(--color-on-surface)] font-bold">
                   1
@@ -167,19 +174,19 @@ export default function FollowUp() {
                 </span>
                 <span className="material-symbols-outlined text-[var(--color-outline)]">chevron_right</span>
               </div>
-            </div>
+            </button>
           </div>
         </section>
 
         {/* Quick Actions Canvas */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-          <button onClick={() => setStatus("improving")} className={`bg-[var(--color-surface-container-highest)] p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-[var(--color-surface-variant)] transition-colors active:scale-95 group ${status === 'improving' ? 'ring-4 ring-[var(--color-primary)]' : ''}`}>
+          <button type="button" onClick={() => setStatus("improving")} className={`bg-[var(--color-surface-container-highest)] p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-[var(--color-surface-variant)] transition-colors active:scale-95 group cursor-pointer ${status === 'improving' ? 'ring-4 ring-[var(--color-primary)]' : ''}`}>
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
               <span className="material-symbols-outlined text-[var(--color-primary)] text-3xl">trending_up</span>
             </div>
             <span className="text-lg font-bold font-manrope">Improving</span>
           </button>
-          <button onClick={() => setStatus("worsening")} className={`bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] p-8 rounded-xl flex flex-col items-center gap-4 hover:opacity-90 transition-opacity active:scale-95 text-white group ${status === 'worsening' ? 'ring-4 ring-red-500' : ''}`}>
+          <button type="button" onClick={() => setStatus("worsening")} className={`bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] p-8 rounded-xl flex flex-col items-center gap-4 hover:opacity-90 transition-opacity active:scale-95 text-white group cursor-pointer ${status === 'worsening' ? 'ring-4 ring-red-500' : ''}`}>
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md group-hover:scale-110 transition-transform">
               <span className="material-symbols-outlined text-white text-3xl filled-icon">trending_down</span>
             </div>
@@ -189,9 +196,10 @@ export default function FollowUp() {
 
         <div className="mt-8 text-center pb-8">
           <button 
+            type="button"
             onClick={handleFollowUp}
             disabled={isSubmitting}
-            className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150 disabled:opacity-50"
+            className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150 disabled:opacity-50 cursor-pointer"
           >
             <span>{isSubmitting ? 'Saving...' : 'Submit Daily Follow-up'}</span>
             <span className="material-symbols-outlined">save</span>
@@ -203,7 +211,7 @@ export default function FollowUp() {
 
       {/* Voice FAB */}
       <div className="fixed bottom-28 right-6 z-40">
-        <button className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] shadow-[0px_12px_32px_rgba(44,105,78,0.2)] flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform duration-200">
+        <button type="button" className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] shadow-[0px_12px_32px_rgba(44,105,78,0.2)] flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer">
           <span className="material-symbols-outlined text-3xl">mic</span>
         </button>
       </div>
