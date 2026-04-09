@@ -4,9 +4,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
+import { AnimalIcon } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/client";
-import { FaDog } from "react-icons/fa";
-import { GiChicken, GiGoat, GiPig } from "react-icons/gi";
 
 function parseSymptoms(text: string): string[] {
   return text
@@ -195,7 +194,12 @@ function NewCaseForm() {
               className={getButtonClasses("poultry")}
             >
               <div className={getIconClasses("poultry")}>
-                <GiChicken size={36} className={caseState.animalType === "poultry" ? "drop-shadow-md" : ""} />
+                <AnimalIcon
+                  animal="poultry"
+                  size={36}
+                  label="Poultry"
+                  className={caseState.animalType === "poultry" ? "drop-shadow-md" : ""}
+                />
               </div>
               <span
                 className={`font-headline font-bold ${caseState.animalType === "poultry" ? "" : "text-[var(--color-on-surface-variant)]"}`}
@@ -209,7 +213,12 @@ function NewCaseForm() {
               className={getButtonClasses("goat")}
             >
               <div className={getIconClasses("goat")}>
-                <GiGoat size={36} className={caseState.animalType === "goat" ? "drop-shadow-md" : ""} />
+                <AnimalIcon
+                  animal="goat"
+                  size={36}
+                  label="Goat"
+                  className={caseState.animalType === "goat" ? "drop-shadow-md" : ""}
+                />
               </div>
               <span
                 className={`font-headline font-bold ${caseState.animalType === "goat" ? "" : "text-[var(--color-on-surface-variant)]"}`}
@@ -223,7 +232,12 @@ function NewCaseForm() {
               className={getButtonClasses("pig")}
             >
               <div className={getIconClasses("pig")}>
-                <GiPig size={36} className={caseState.animalType === "pig" ? "drop-shadow-md" : ""} />
+                <AnimalIcon
+                  animal="pig"
+                  size={36}
+                  label="Pig"
+                  className={caseState.animalType === "pig" ? "drop-shadow-md" : ""}
+                />
               </div>
               <span
                 className={`font-headline font-bold ${caseState.animalType === "pig" ? "" : "text-[var(--color-on-surface-variant)]"}`}
@@ -237,7 +251,12 @@ function NewCaseForm() {
               className={getButtonClasses("dog")}
             >
               <div className={getIconClasses("dog")}>
-                <FaDog size={36} className={caseState.animalType === "dog" ? "drop-shadow-md" : ""} />
+                <AnimalIcon
+                  animal="dog"
+                  size={36}
+                  label="Dog"
+                  className={caseState.animalType === "dog" ? "drop-shadow-md" : ""}
+                />
               </div>
               <span
                 className={`font-headline font-bold ${caseState.animalType === "dog" ? "" : "text-[var(--color-on-surface-variant)]"}`}

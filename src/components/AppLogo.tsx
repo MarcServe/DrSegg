@@ -17,17 +17,22 @@ export function AppLogo({
   size = 104,
   emphasis = false,
 }: AppLogoProps) {
+  /** Knock out flat white in non–alpha PNGs so it doesn’t read as a solid “tile” on the header. */
+  const knockout = "mix-blend-multiply dark:mix-blend-screen";
+
   const img = (
     <Image
       src="/dr-morgees-logo.png"
       alt="Dr Segg"
       width={size}
       height={size}
-      className={`object-contain border-0 bg-transparent ${
+      placeholder="empty"
+      className={`object-contain border-0 !bg-transparent [background:none] ${knockout} ${
         emphasis
           ? "drop-shadow-[0_2px_12px_rgba(15,82,56,0.12)] dark:drop-shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
           : ""
       } ${className}`}
+      style={{ backgroundColor: "transparent" }}
       priority
     />
   );

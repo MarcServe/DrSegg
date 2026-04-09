@@ -1,13 +1,30 @@
-import Image from "next/image";
 import Link from "next/link";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import { AppLogo } from "@/components/AppLogo";
-import { FaDog } from "react-icons/fa";
-import { GiChicken, GiGoat, GiPig } from "react-icons/gi";
 import { createClient } from "@/lib/supabase/server";
 
-const PLACEHOLDER =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuD0bT2yT4JLfFfg-uUKJDYOX5-RxM1idnEmsaY3sQIQfCA6_lJnA9vUXLVw9jEt5Vh3v-ur5iUhtT3uM8cvhiQKUcrXo0dJX0_ZA13CaDFePYwptSjXfWf_mQYXUWOkuuTUev3rrnH7GcfczLcLOITw13ZyJEBxtBNR5VlDqYzARacqhHpk2u1p3ysfHkdwjS1SfmqfPvUbdP9ejH4Aqu6yWlq75xGuVohJyByOryay-sHb1VddWZEQ3rxTEDThtFALpNB8miY-r9k";
+function formatRelative(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function truncate(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
 
 function statusLabel(health: string | null) {
   switch (health) {
@@ -36,6 +53,12 @@ export default async function Home() {
     health_status: string | null;
   }[] = [];
 
+  let docCount = 0;
+  let caseCount = 0;
+  let latestDoc: { title: string; created_at: string } | null = null;
+  let latestCaseRow: { animal_type: string; created_at: string } | null = null;
+  let urgentCaseCount = 0;
+
   if (user) {
     const { data } = await supabase
       .from("cases")
@@ -43,6 +66,75 @@ export default async function Home() {
       .order("created_at", { ascending: false })
       .limit(2);
     recentCases = data ?? [];
+
+    const { count: dc } = await supabase
+      .from("farm_documents")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    docCount = dc ?? 0;
+
+    const { count: cc } = await supabase
+      .from("cases")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    caseCount = cc ?? 0;
+
+    const { data: ld } = await supabase
+      .from("farm_documents")
+      .select("title, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestDoc = ld;
+
+    const { data: lc } = await supabase
+      .from("cases")
+      .select("animal_type, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestCaseRow = lc;
+
+    const { count: uc } = await supabase
+      .from("cases")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .or("health_status.eq.critical,status.eq.escalated");
+    urgentCaseCount = uc ?? 0;
+  }
+
+  let recentActivitySummary = "Farm documents and case history.";
+  let recentActivityDetail = "Sign in to see saved files and timelines.";
+  if (user) {
+    recentActivitySummary = `${docCount} document${docCount === 1 ? "" : "s"} · ${caseCount} case${caseCount === 1 ? "" : "s"}`;
+    if (docCount === 0 && caseCount === 0) {
+      recentActivityDetail = "No activity yet — upload on Records or start a case.";
+    } else {
+      const docTime = latestDoc?.created_at ? new Date(latestDoc.created_at).getTime() : 0;
+      const caseTime = latestCaseRow?.created_at ? new Date(latestCaseRow.created_at).getTime() : 0;
+      if (latestDoc && (!latestCaseRow || docTime >= caseTime)) {
+        recentActivityDetail = `Latest: ${truncate(latestDoc.title, 28)} · ${formatRelative(latestDoc.created_at)}`;
+      } else if (latestCaseRow) {
+        recentActivityDetail = `Latest case: ${latestCaseRow.animal_type} · ${formatRelative(latestCaseRow.created_at)}`;
+      }
+    }
+  }
+
+  let emergencySummary = "First aid & escalation.";
+  let emergencyDetail = "Sign in to see if any case needs urgent follow-up.";
+  if (user) {
+    if (urgentCaseCount > 0) {
+      emergencySummary = `${urgentCaseCount} urgent`;
+      emergencyDetail =
+        urgentCaseCount === 1
+          ? "One case is flagged critical or escalated — open Cases."
+          : `${urgentCaseCount} cases need urgent follow-up.`;
+    } else {
+      emergencySummary = "All clear";
+      emergencyDetail = "No critical or escalated cases. Review protocols anytime.";
+    }
   }
 
   return (
@@ -96,40 +188,40 @@ export default async function Home() {
               Animal Quick Access
             </h2>
           </Link>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Link
               href="/new-case?animal=poultry"
-              className="bg-[var(--color-surface-container-low)] p-5 rounded-xl flex flex-col items-center gap-2 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
+              className="bg-[var(--color-surface-container-low)] p-4 sm:p-5 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
             >
-              <div className="text-[var(--color-primary)]">
-                <GiChicken size={36} />
+              <div className="w-full max-w-[160px] aspect-square flex items-center justify-center">
+                <AnimalIcon animal="poultry" size={160} label="Poultry" />
               </div>
               <span className="text-sm font-bold text-[var(--color-on-secondary-container)]">Poultry</span>
             </Link>
             <Link
               href="/new-case?animal=goat"
-              className="bg-[var(--color-surface-container-low)] p-5 rounded-xl flex flex-col items-center gap-2 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
+              className="bg-[var(--color-surface-container-low)] p-4 sm:p-5 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
             >
-              <div className="text-[var(--color-primary)]">
-                <GiGoat size={36} />
+              <div className="w-full max-w-[160px] aspect-square flex items-center justify-center">
+                <AnimalIcon animal="goat" size={160} label="Goat" />
               </div>
               <span className="text-sm font-bold text-[var(--color-on-secondary-container)]">Goat</span>
             </Link>
             <Link
               href="/new-case?animal=pig"
-              className="bg-[var(--color-surface-container-low)] p-5 rounded-xl flex flex-col items-center gap-2 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
+              className="bg-[var(--color-surface-container-low)] p-4 sm:p-5 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
             >
-              <div className="text-[var(--color-primary)]">
-                <GiPig size={36} />
+              <div className="w-full max-w-[160px] aspect-square flex items-center justify-center">
+                <AnimalIcon animal="pig" size={160} label="Pig" />
               </div>
               <span className="text-sm font-bold text-[var(--color-on-secondary-container)]">Pig</span>
             </Link>
             <Link
               href="/new-case?animal=dog"
-              className="bg-[var(--color-surface-container-low)] p-5 rounded-xl flex flex-col items-center gap-2 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
+              className="bg-[var(--color-surface-container-low)] p-4 sm:p-5 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-container-high)] transition-colors cursor-pointer"
             >
-              <div className="text-[var(--color-primary)]">
-                <FaDog size={36} />
+              <div className="w-full max-w-[160px] aspect-square flex items-center justify-center">
+                <AnimalIcon animal="dog" size={160} label="Dog" />
               </div>
               <span className="text-sm font-bold text-[var(--color-on-secondary-container)]">Dog</span>
             </Link>
@@ -173,6 +265,7 @@ export default async function Home() {
               {user &&
                 recentCases.map((c) => {
                   const badge = statusLabel(c.health_status);
+                  const iconKey = animalTypeToIconKey(c.animal_type);
                   return (
                     <Link
                       key={c.id}
@@ -180,13 +273,19 @@ export default async function Home() {
                       className="bg-[var(--color-surface-container-low)] p-4 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-container-high)] transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full overflow-hidden relative bg-[var(--color-surface-container-highest)]">
-                          <Image
-                            className="object-cover"
-                            alt={c.animal_type}
-                            fill
-                            src={PLACEHOLDER}
-                          />
+                        <div className="w-12 h-12 rounded-full overflow-hidden relative bg-[var(--color-surface-container-highest)] flex items-center justify-center shrink-0">
+                          {iconKey ? (
+                            <AnimalIcon
+                              animal={iconKey}
+                              size={48}
+                              label={c.animal_type}
+                              className="max-h-12"
+                            />
+                          ) : (
+                            <span className="text-lg font-bold text-[var(--color-primary)] capitalize">
+                              {c.animal_type.charAt(0)}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <p className="font-bold text-[var(--color-on-surface)] capitalize">
@@ -210,25 +309,35 @@ export default async function Home() {
 
           <Link
             href="/records"
-            className="bg-[var(--color-surface-container)] p-6 rounded-xl space-y-3 block cursor-pointer hover:opacity-90 active:scale-[0.98] transition-all"
+            className="bg-[var(--color-surface-container)] p-6 rounded-xl space-y-3 block cursor-pointer hover:opacity-90 active:scale-[0.98] transition-all min-h-[156px] flex flex-col"
           >
             <span className="material-symbols-outlined text-[var(--color-primary)] text-3xl">history</span>
-            <h3 className="font-headline font-bold text-[var(--color-on-surface)]">Recent Activity</h3>
-            <p className="text-xs text-[var(--color-on-surface-variant)] leading-relaxed">
-              Farm documents and case exports.
-            </p>
+            <div className="flex-1 min-h-0">
+              <h3 className="font-headline font-bold text-[var(--color-on-surface)]">Recent Activity</h3>
+              <p className="text-sm font-semibold text-[var(--color-on-surface)] mt-1 leading-snug">
+                {recentActivitySummary}
+              </p>
+              <p className="text-xs text-[var(--color-on-surface-variant)] leading-relaxed mt-1 line-clamp-3">
+                {recentActivityDetail}
+              </p>
+            </div>
           </Link>
 
           <Link
-            href="/guided-inspection"
-            className="bg-[var(--color-error-container)] p-6 rounded-xl space-y-3 flex flex-col justify-between cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
+            href={user && urgentCaseCount > 0 ? "/cases" : "/guided-inspection"}
+            className="bg-[var(--color-error-container)] p-6 rounded-xl space-y-3 flex flex-col justify-between cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all min-h-[156px]"
           >
             <span className="material-symbols-outlined text-[var(--color-error)] text-3xl filled-icon">
               emergency_home
             </span>
             <div>
               <h3 className="font-headline font-bold text-[var(--color-on-error-container)]">Emergency Guide</h3>
-              <p className="text-xs text-[var(--color-on-error-container)]/70 mt-1">Critical protocols.</p>
+              <p className="text-sm font-semibold text-[var(--color-on-error-container)] mt-1 leading-snug">
+                {emergencySummary}
+              </p>
+              <p className="text-xs text-[var(--color-on-error-container)]/80 mt-1 leading-relaxed line-clamp-3">
+                {emergencyDetail}
+              </p>
             </div>
           </Link>
         </section>
