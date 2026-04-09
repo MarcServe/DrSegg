@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import BottomNavBar from "@/components/BottomNavBar";
 import { createClient } from "@/lib/supabase/client";
+
+type CaseOption = {
+  id: string;
+  animal_type: string;
+  created_at: string;
+};
 
 type DocRow = {
   id: string;
@@ -11,25 +18,81 @@ type DocRow = {
   file_url: string;
   doc_type: string | null;
   created_at: string;
+  case_id: string | null;
+  cases: { animal_type: string } | null;
 };
 
-export default function Records() {
+function normalizeCasesEmbed(
+  cases: unknown
+): { animal_type: string } | null {
+  if (!cases || typeof cases !== "object") return null;
+  if (Array.isArray(cases)) {
+    const first = cases[0];
+    return first && typeof first === "object" && "animal_type" in first
+      ? (first as { animal_type: string })
+      : null;
+  }
+  if ("animal_type" in cases) return cases as { animal_type: string };
+  return null;
+}
+
+function RecordsContent() {
+  const searchParams = useSearchParams();
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [cases, setCases] = useState<CaseOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [optionalCaseId, setOptionalCaseId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("farm_documents")
-      .select("id, title, file_url, doc_type, created_at")
+      .select("id, title, file_url, doc_type, created_at, case_id, cases(animal_type)")
       .order("created_at", { ascending: false });
-    if (!error && data) setDocs(data as DocRow[]);
+    if (!error && data) {
+      setDocs(
+        (data as Record<string, unknown>[]).map((row) => ({
+          id: row.id as string,
+          title: row.title as string,
+          file_url: row.file_url as string,
+          doc_type: (row.doc_type as string | null) ?? null,
+          created_at: row.created_at as string,
+          case_id: (row.case_id as string | null) ?? null,
+          cases: normalizeCasesEmbed(row.cases),
+        }))
+      );
+    }
     setLoading(false);
+  }, []);
+
+  const loadCases = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("cases")
+      .select("id, animal_type, created_at")
+      .order("created_at", { ascending: false })
+      .limit(80);
+    if (!error && data) setCases(data as CaseOption[]);
   }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadCases();
+  }, [load, loadCases]);
+
+  useEffect(() => {
+    const raw = searchParams.get("case");
+    if (raw && /^[0-9a-f-]{36}$/i.test(raw)) {
+      setOptionalCaseId(raw);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!cases.length || !optionalCaseId) return;
+    if (!cases.some((c) => c.id === optionalCaseId)) {
+      setOptionalCaseId(null);
+    }
+  }, [cases, optionalCaseId]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -54,12 +117,16 @@ export default function Records() {
         console.error(upErr);
         continue;
       }
-      await supabase.from("farm_documents").insert({
+      const insert: Record<string, unknown> = {
         user_id: user.id,
         title: file.name,
         file_url: path,
         doc_type: file.type || "file",
-      });
+      };
+      if (optionalCaseId) {
+        insert.case_id = optionalCaseId;
+      }
+      await supabase.from("farm_documents").insert(insert);
     }
     e.target.value = "";
     void load();
@@ -106,6 +173,27 @@ export default function Records() {
           </div>
         </button>
 
+        <label className="block space-y-2">
+          <span className="text-sm font-bold text-[var(--color-on-surface-variant)]">
+            Attach to case (optional)
+          </span>
+          <select
+            value={optionalCaseId ?? ""}
+            onChange={(e) => setOptionalCaseId(e.target.value || null)}
+            className="w-full rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container-lowest)] px-4 py-3 text-[var(--color-on-surface)]"
+          >
+            <option value="">No case — general farm record</option>
+            {cases.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.animal_type} · {new Date(c.created_at).toLocaleDateString()} · #{c.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[var(--color-outline)]">
+            New uploads are linked to the selected case. Change anytime before uploading.
+          </p>
+        </label>
+
         <div className="space-y-4 mt-8">
           <Link
             href="/cases"
@@ -120,13 +208,12 @@ export default function Records() {
             </p>
           )}
           {docs.map((record) => (
-            <button
+            <div
               key={record.id}
-              type="button"
-              className="w-full bg-[var(--color-surface-container-lowest)] p-4 rounded-xl flex items-center justify-between hover:bg-[var(--color-surface-container-low)] transition-colors shadow-sm border border-[var(--color-outline-variant)]/15 cursor-pointer text-left active:scale-[0.99]"
+              className="w-full bg-[var(--color-surface-container-lowest)] p-4 rounded-xl flex items-center justify-between shadow-sm border border-[var(--color-outline-variant)]/15"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-[var(--color-surface-container-highest)] rounded-full flex items-center justify-center text-[var(--color-primary)]">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-12 h-12 shrink-0 bg-[var(--color-surface-container-highest)] rounded-full flex items-center justify-center text-[var(--color-primary)]">
                   <span className="material-symbols-outlined">
                     {record.doc_type?.includes("pdf")
                       ? "picture_as_pdf"
@@ -135,20 +222,44 @@ export default function Records() {
                         : "description"}
                   </span>
                 </div>
-                <div>
-                  <p className="font-bold text-[var(--color-on-surface)]">{record.title}</p>
+                <div className="min-w-0">
+                  <p className="font-bold text-[var(--color-on-surface)] truncate">{record.title}</p>
                   <p className="text-sm text-[var(--color-outline)]">
                     {new Date(record.created_at).toLocaleDateString()} • {record.doc_type || "File"}
                   </p>
+                  {record.case_id && record.cases?.animal_type ? (
+                    <p className="text-xs text-[var(--color-primary)] font-semibold mt-1">
+                      Linked:{" "}
+                      <Link href={`/case/${record.case_id}`} className="underline underline-offset-2">
+                        {record.cases.animal_type} case
+                      </Link>
+                    </p>
+                  ) : null}
                 </div>
               </div>
-              <span className="material-symbols-outlined text-[var(--color-outline)]">download</span>
-            </button>
+              <span className="material-symbols-outlined text-[var(--color-outline)] shrink-0" aria-hidden>
+                download
+              </span>
+            </div>
           ))}
         </div>
       </main>
 
       <BottomNavBar />
     </>
+  );
+}
+
+export default function Records() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen pt-28 text-center text-[var(--color-on-surface-variant)]">
+          Loading…
+        </div>
+      }
+    >
+      <RecordsContent />
+    </Suspense>
   );
 }

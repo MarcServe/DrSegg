@@ -34,6 +34,12 @@ export default async function CaseDetail({ params }: PageProps) {
     notFound();
   }
 
+  const { data: attachedDocs } = await supabase
+    .from("farm_documents")
+    .select("id, title, doc_type, created_at")
+    .eq("case_id", id)
+    .order("created_at", { ascending: false });
+
   const analysis = Array.isArray(row.case_analysis)
     ? row.case_analysis[0]
     : row.case_analysis;
@@ -111,7 +117,10 @@ export default async function CaseDetail({ params }: PageProps) {
       </header>
 
       <main className="px-6 mt-6 max-w-4xl mx-auto space-y-8 pb-32">
-        <Link href="/records" className="flex items-center gap-6 p-2 cursor-pointer active:scale-[0.99]">
+        <Link
+          href={`/records?case=${id}`}
+          className="flex items-center gap-6 p-2 cursor-pointer active:scale-[0.99]"
+        >
           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm relative">
             <Image className="object-cover" alt={row.animal_type} fill src={PLACEHOLDER} />
           </div>
@@ -132,6 +141,48 @@ export default async function CaseDetail({ params }: PageProps) {
             </div>
           </div>
         </Link>
+
+        <section className="space-y-4">
+          <div className="flex items-center justify-between px-2 gap-4">
+            <h2 className="text-xl font-bold font-manrope">Farm records</h2>
+            <Link
+              href={`/records?case=${id}`}
+              className="text-sm font-bold text-[var(--color-primary)] shrink-0 hover:underline"
+            >
+              Upload
+            </Link>
+          </div>
+          {attachedDocs && attachedDocs.length > 0 ? (
+            <ul className="space-y-2">
+              {attachedDocs.map((doc) => (
+                <li
+                  key={doc.id}
+                  className="bg-[var(--color-surface-container-low)] px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[var(--color-primary)] shrink-0">
+                      {doc.doc_type?.includes("pdf")
+                        ? "picture_as_pdf"
+                        : doc.doc_type?.startsWith("image")
+                          ? "image"
+                          : "description"}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[var(--color-on-surface)] truncate">{doc.title}</p>
+                      <p className="text-xs text-[var(--color-outline)]">
+                        {new Date(doc.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-[var(--color-on-surface-variant)] px-2">
+              No documents linked yet. Use Upload to add PDFs, images, or receipts to this case.
+            </p>
+          )}
+        </section>
 
         <section className="space-y-6">
           <Link
