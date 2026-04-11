@@ -64,7 +64,7 @@ export default function HealthStatus() {
           <Link href="/new-case" className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
-          <AppLogo href="/" size={104} />
+          <AppLogo href="/cases" size={104} />
         </div>
         <Link
           href="/profile"
@@ -143,6 +143,47 @@ export default function HealthStatus() {
 
         {caseState.assessmentDisclaimer && (
           <p className="text-xs text-[var(--color-outline)] text-center px-2">{caseState.assessmentDisclaimer}</p>
+        )}
+
+        {caseState.caseId && (
+          <section className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container-low)] p-4 space-y-3">
+            <p className="font-headline font-bold text-[var(--color-on-surface)]">Analysis saved</p>
+            <p className="text-sm text-[var(--color-on-surface-variant)]">
+              This case is stored in your account. Use the links below for the full write-up, treatments, and documents.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/case/${caseState.caseId}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] text-white font-headline font-bold py-3 px-4 hover:opacity-95 active:scale-[0.99]"
+              >
+                <span className="material-symbols-outlined text-xl">folder_open</span>
+                View case file
+              </Link>
+              <Link
+                href="/analysis-result"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--color-primary)] text-[var(--color-primary)] font-bold py-3 px-4 hover:bg-[var(--color-primary)]/5"
+              >
+                <span className="material-symbols-outlined text-xl">analytics</span>
+                Full analysis &amp; differentials
+              </Link>
+              <Link
+                href="/treatment-options"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)] font-bold py-3 px-4 hover:opacity-95"
+              >
+                <span className="material-symbols-outlined text-xl">vaccines</span>
+                Treatment options (from database)
+              </Link>
+              <Link
+                href={`/records?case=${caseState.caseId}`}
+                className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-[var(--color-primary)] py-2 underline underline-offset-2"
+              >
+                Attach farm record to this case
+              </Link>
+              <Link href="/cases" className="text-center text-sm text-[var(--color-on-surface-variant)] hover:text-[var(--color-primary)]">
+                See all cases →
+              </Link>
+            </div>
+          </section>
         )}
 
         {/* Bento Grid Insights */}

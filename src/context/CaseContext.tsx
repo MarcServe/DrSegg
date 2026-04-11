@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
+import type { KnowledgeMatch } from "@/lib/ai/schemas";
+import type { TreatmentRow } from "@/lib/ai/treatments";
 
 export type HealthStatus = "healthy" | "mild_concern" | "likely_sick" | "critical" | null;
 
@@ -22,6 +24,10 @@ interface CaseState {
   assessmentDisclaimer: string | null;
   differentialDiagnoses: { condition: string; confidence: number }[];
   escalationSuggested: boolean;
+  supportingEvidence: string[];
+  knowledgeMatches: KnowledgeMatch[];
+  treatments: TreatmentRow[];
+  modelUsed: string | null;
 }
 
 interface CaseContextType {
@@ -55,6 +61,10 @@ const initialState: CaseState = {
   assessmentDisclaimer: null,
   differentialDiagnoses: [],
   escalationSuggested: false,
+  supportingEvidence: [],
+  knowledgeMatches: [],
+  treatments: [],
+  modelUsed: null,
 };
 
 const CaseContext = createContext<CaseContextType | undefined>(undefined);

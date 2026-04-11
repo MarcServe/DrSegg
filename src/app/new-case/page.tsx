@@ -25,6 +25,7 @@ function NewCaseForm() {
     setCaseId,
     setSymptoms,
     setAssessmentDetails,
+    setRegion,
   } = useCase();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [symptomText, setSymptomText] = useState("");
@@ -65,6 +66,11 @@ function NewCaseForm() {
       if (!user) {
         router.push("/login?next=/new-case");
         return;
+      }
+
+      const { data: profileRow } = await supabase.from("profiles").select("region").eq("id", user.id).maybeSingle();
+      if (profileRow?.region?.trim()) {
+        setRegion(profileRow.region.trim());
       }
 
       const symptoms = parseSymptoms(symptomText);
@@ -119,6 +125,10 @@ function NewCaseForm() {
           data.recommendation_type === "emergency" ||
           data.recommendation_type === "urgent_vet" ||
           (data.red_flags?.length ?? 0) > 0,
+        supportingEvidence: data.supporting_evidence ?? [],
+        knowledgeMatches: data.knowledge_matches ?? [],
+        treatments: data.treatments ?? [],
+        modelUsed: data.model_used ?? null,
       });
 
       router.push("/health-status");

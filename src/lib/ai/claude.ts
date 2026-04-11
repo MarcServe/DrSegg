@@ -1,34 +1,6 @@
 import { LlmAssessmentJsonSchema, type LlmAssessmentJson } from "./schemas";
 import type { KnowledgeMatch } from "./schemas";
-
-function buildPrompt(
-  animal: string,
-  symptoms: string[],
-  region: string,
-  knowledgeMatches: KnowledgeMatch[]
-): string {
-  const kb =
-    knowledgeMatches.length > 0
-      ? `\nReference conditions (grounding):\n${knowledgeMatches
-          .map((k) => `- ${k.condition_name} (${k.condition_code})`)
-          .join("\n")}\n`
-      : "";
-
-  return `You are a farm/companion animal triage assistant — NOT a vet. Never prescribe specific drugs or doses.
-
-Animal: ${animal}
-Region: ${region}
-Symptoms: ${symptoms.length ? symptoms.join("; ") : "none"}
-${kb}
-Respond with ONLY a JSON object (no markdown) using these keys:
-summary, health_status (healthy|mild_concern|likely_sick|critical), confidence (0-100),
-possible_conditions (array of strings),
-differential_diagnoses (array of {condition, confidence 0-1}),
-severity (low | YELLOW (MONITOR) | ORANGE (HIGH) | RED (CRITICAL)),
-supporting_evidence, missing_information, red_flags (arrays of strings),
-needs_more_info (boolean), suggested_next_checks (array of strings),
-recommendation_type (monitor|isolate|urgent_vet|emergency|pending_more_info)`;
-}
+import { ASSESSMENT_SYSTEM_PROMPT, buildAssessmentUserMessage } from "./assessment-prompt";
 
 function parseJsonContent(raw: string): LlmAssessmentJson | null {
   try {
@@ -49,7 +21,12 @@ export async function callClaudeAssessmentText(args: {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "ANTHROPIC_API_KEY missing" };
 
-  const prompt = buildPrompt(args.animal, args.symptoms, args.region, args.knowledgeMatches);
+  const userContent = buildAssessmentUserMessage(
+    args.animal,
+    args.symptoms,
+    args.region,
+    args.knowledgeMatches
+  );
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -60,8 +37,9 @@ export async function callClaudeAssessmentText(args: {
     },
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
-      max_tokens: 1200,
-      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1800,
+      system: ASSESSMENT_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
     }),
   });
 
@@ -91,7 +69,12 @@ export async function callClaudeAssessmentVision(args: {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "ANTHROPIC_API_KEY missing" };
 
-  const textPart = buildPrompt(args.animal, args.symptoms, args.region, args.knowledgeMatches);
+  const textPart = buildAssessmentUserMessage(
+    args.animal,
+    args.symptoms,
+    args.region,
+    args.knowledgeMatches
+  );
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -102,7 +85,8 @@ export async function callClaudeAssessmentVision(args: {
     },
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
-      max_tokens: 1200,
+      max_tokens: 1800,
+      system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [
         {
           role: "user",

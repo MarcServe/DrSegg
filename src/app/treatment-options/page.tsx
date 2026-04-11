@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
@@ -40,11 +41,21 @@ function mapApiTreatment(
   };
 }
 
-export default function TreatmentOptions() {
-  const { caseState } = useCase();
+function TreatmentOptionsInner() {
+  const searchParams = useSearchParams();
+  const { caseState, setCaseId } = useCase();
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [apiWarnings, setApiWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const followUpHref = caseState.caseId ? `/follow-up?case=${caseState.caseId}` : "/follow-up";
+
+  useEffect(() => {
+    const c = searchParams.get("case");
+    if (c && /^[0-9a-f-]{36}$/i.test(c) && c !== caseState.caseId) {
+      setCaseId(c);
+    }
+  }, [searchParams, setCaseId, caseState.caseId]);
 
   useEffect(() => {
     const fetchTreatments = async () => {
@@ -87,7 +98,7 @@ export default function TreatmentOptions() {
           <Link href="/analysis-result" className="material-symbols-outlined text-[#0f5238] dark:text-emerald-500 cursor-pointer active:scale-95 duration-150">
             arrow_back
           </Link>
-          <AppLogo href="/" size={104} />
+          <AppLogo href="/cases" size={104} />
         </div>
         <div className="flex items-center gap-4">
           <Link
@@ -139,7 +150,7 @@ export default function TreatmentOptions() {
             {/* Treatment Card 1 (Large Feature) */}
             {treatments.length > 0 && (
               <Link
-                href="/follow-up"
+                href={followUpHref}
                 className="lg:col-span-7 bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.05)] border border-[var(--color-outline-variant)]/15 flex flex-col gap-6 cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99] transition-all"
               >
                 <div className="flex flex-col md:flex-row gap-8">
@@ -207,7 +218,7 @@ export default function TreatmentOptions() {
             {/* Treatment Card 2 (Secondary) */}
             {treatments.length > 1 && (
               <Link
-                href="/follow-up"
+                href={followUpHref}
                 className="lg:col-span-5 bg-[var(--color-surface-container)] rounded-xl p-8 flex flex-col justify-between cursor-pointer hover:opacity-95 active:scale-[0.99]"
               >
                 <div>
@@ -249,7 +260,7 @@ export default function TreatmentOptions() {
 
             {/* Treatment Card 3 (Status Alert Style) */}
             <Link
-              href="/follow-up"
+              href={followUpHref}
               className="lg:col-span-4 bg-[var(--color-surface-container-lowest)] rounded-xl p-6 shadow-sm border border-[var(--color-outline-variant)]/10 block cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99]"
             >
               <div className="flex items-center justify-between mb-4">
@@ -278,7 +289,7 @@ export default function TreatmentOptions() {
 
             {/* Treatment Card 4 (Small High Contrast) */}
             <Link
-              href="/follow-up"
+              href={followUpHref}
               className="lg:col-span-8 bg-[var(--color-surface-container-high)] rounded-xl p-8 flex flex-col md:flex-row gap-8 items-center cursor-pointer hover:opacity-95 active:scale-[0.99]"
             >
               <div className="flex-1">
@@ -325,7 +336,7 @@ export default function TreatmentOptions() {
         )}
 
         <div className="mt-12 text-center">
-          <Link href="/follow-up" className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150">
+          <Link href={followUpHref} className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150">
             <span>Start Treatment & Track Progress</span>
             <span className="material-symbols-outlined">arrow_forward</span>
           </Link>
@@ -334,5 +345,17 @@ export default function TreatmentOptions() {
 
       <BottomNavBar />
     </>
+  );
+}
+
+export default function TreatmentOptions() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen pt-28 text-center text-[var(--color-on-surface-variant)]">Loading…</div>
+      }
+    >
+      <TreatmentOptionsInner />
+    </Suspense>
   );
 }

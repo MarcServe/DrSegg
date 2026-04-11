@@ -1,11 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/server";
-
-const PLACEHOLDER =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuD0bT2yT4JLfFfg-uUKJDYOX5-RxM1idnEmsaY3sQIQfCA6_lJnA9vUXLVw9jEt5Vh3v-ur5iUhtT3uM8cvhiQKUcrXo0dJX0_ZA13CaDFePYwptSjXfWf_mQYXUWOkuuTUev3rrnH7GcfczLcLOITw13ZyJEBxtBNR5VlDqYzARacqhHpk2u1p3ysfHkdwjS1SfmqfPvUbdP9ejH4Aqu6yWlq75xGuVohJyByOryay-sHb1VddWZEQ3rxTEDThtFALpNB8miY-r9k";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -97,6 +94,8 @@ export default async function CaseDetail({ params }: PageProps) {
     row.health_status?.replace(/_/g, " ") ||
     "Case review";
 
+  const speciesIconKey = animalTypeToIconKey(row.animal_type);
+
   return (
     <>
       <header className="bg-[#f9faf6] dark:bg-stone-950 flex justify-between items-center px-6 py-4 w-full sticky top-0 z-50">
@@ -121,8 +120,14 @@ export default async function CaseDetail({ params }: PageProps) {
           href={`/records?case=${id}`}
           className="flex items-center gap-6 p-2 cursor-pointer active:scale-[0.99]"
         >
-          <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm relative">
-            <Image className="object-cover" alt={row.animal_type} fill src={PLACEHOLDER} />
+          <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm relative bg-[var(--color-surface-container-highest)] flex items-center justify-center shrink-0">
+            {speciesIconKey ? (
+              <AnimalIcon animal={speciesIconKey} size={80} label={row.animal_type} className="max-h-20" />
+            ) : (
+              <span className="text-2xl font-bold text-[var(--color-primary)] capitalize">
+                {row.animal_type.charAt(0)}
+              </span>
+            )}
           </div>
           <div>
             <span className="text-xs font-bold tracking-widest uppercase text-[var(--color-outline)] mb-1 block">
@@ -184,9 +189,28 @@ export default async function CaseDetail({ params }: PageProps) {
           )}
         </section>
 
+        <section className="space-y-4 px-2">
+          <div className="flex flex-wrap gap-3 text-sm font-bold">
+            <Link
+              href={`/follow-up?case=${id}`}
+              className="text-[var(--color-primary)] hover:underline"
+            >
+              Follow-up
+            </Link>
+            <span className="text-[var(--color-outline)]">·</span>
+            <Link href={`/treatment-options?case=${id}`} className="text-[var(--color-primary)] hover:underline">
+              Treatments
+            </Link>
+            <span className="text-[var(--color-outline)]">·</span>
+            <Link href="/analysis-result" className="text-[var(--color-primary)] hover:underline">
+              Full analysis
+            </Link>
+          </div>
+        </section>
+
         <section className="space-y-6">
           <Link
-            href="/follow-up"
+            href={`/follow-up?case=${id}`}
             className="text-xl font-bold font-manrope px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit"
           >
             Recovery Timeline
@@ -226,7 +250,7 @@ export default async function CaseDetail({ params }: PageProps) {
 
         <div className="mt-12 text-center">
           <Link
-            href="/follow-up"
+            href={`/follow-up?case=${id}`}
             className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150"
           >
             <span>Add Follow-up Update</span>
