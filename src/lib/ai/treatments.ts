@@ -65,11 +65,14 @@ export async function fetchTreatmentsForCondition(
 
   const { data: cond, error: cErr } = await supabase
     .from("knowledge_conditions")
-    .select("id")
+    .select("id, condition_name")
     .eq("condition_code", args.conditionCode)
     .maybeSingle();
 
   if (cErr || !cond?.id) return [];
+
+  const row = cond as { id: string; condition_name: string | null };
+  const conditionLabel = row.condition_name?.trim() || args.conditionCode.replace(/_/g, " ");
 
   const selectWithImage = `
       dosage_text,
@@ -155,10 +158,10 @@ export async function fetchTreatmentsForCondition(
     if (p.supportive_care || p.dosage_text) {
       const title =
         p.treatment_level === "first_line"
-          ? "First-line management"
+          ? `${conditionLabel} — first-line management`
           : p.treatment_level === "supportive"
-            ? "Supportive & environmental care"
-            : "Condition management";
+            ? `${conditionLabel} — supportive & environmental care`
+            : `${conditionLabel} — management`;
       const item: TreatmentRow = {
         drug_name: title,
         generic_name: null,

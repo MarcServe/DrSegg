@@ -26,6 +26,7 @@ function TreatmentOptionsInner() {
   const [treatments, setTreatments] = useState<TreatmentRow[]>([]);
   const [apiWarnings, setApiWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [resolvedConditionName, setResolvedConditionName] = useState<string | null>(null);
 
   const followUpHref = caseState.caseId ? `/follow-up?case=${caseState.caseId}` : "/follow-up";
   const backHref = caseState.caseId ? `/case/${caseState.caseId}` : "/analysis-result";
@@ -40,22 +41,31 @@ function TreatmentOptionsInner() {
   useEffect(() => {
     const fetchTreatments = async () => {
       try {
-        const conditionCode = caseState.knowledgeMatches[0]?.condition_code;
+        const payload: Record<string, unknown> = {
+          region: caseState.region,
+          condition: caseState.possibleConditions[0] || "",
+          species: caseState.animalType || "poultry",
+          caseId: caseState.caseId,
+        };
+        if (!caseState.caseId) {
+          payload.condition_code = caseState.knowledgeMatches[0]?.condition_code;
+        }
         const response = await fetch("/api/treatment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            region: caseState.region,
-            condition: caseState.possibleConditions[0] || "",
-            condition_code: conditionCode || undefined,
-            species: caseState.animalType || "poultry",
-            caseId: caseState.caseId,
-          }),
+          body: JSON.stringify(payload),
         });
-        const data = await response.json();
+        const data = (await response.json()) as {
+          treatments?: TreatmentRow[];
+          warnings?: string[];
+          resolved_condition_name?: string | null;
+        };
         const raw = (data.treatments || []) as TreatmentRow[];
         setTreatments(raw);
         setApiWarnings(data.warnings || []);
+        setResolvedConditionName(
+          typeof data.resolved_condition_name === "string" ? data.resolved_condition_name : null
+        );
       } catch (error) {
         console.error("Failed to fetch treatments:", error);
       } finally {
@@ -99,10 +109,12 @@ function TreatmentOptionsInner() {
             <h1 className="font-headline text-4xl font-extrabold tracking-tight text-[var(--color-on-surface)]">
               Treatment options
             </h1>
-            {caseState.possibleConditions[0] ? (
+            {resolvedConditionName || caseState.possibleConditions[0] ? (
               <p className="mt-2 text-[var(--color-on-surface-variant)]">
-                Matched condition context:{" "}
-                <span className="font-semibold text-[var(--color-on-surface)]">{caseState.possibleConditions[0]}</span>
+                Treatments matched to:{" "}
+                <span className="font-semibold text-[var(--color-on-surface)]">
+                  {resolvedConditionName ?? caseState.possibleConditions[0]}
+                </span>
               </p>
             ) : null}
           </div>

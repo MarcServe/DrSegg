@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchTreatmentsForCondition } from "@/lib/ai/treatments";
+import {
+  pickConditionCodeForTreatment,
+  type KnowledgeMatchLite,
+} from "@/lib/ai/treatment-condition";
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +24,8 @@ export async function POST(request: Request) {
     const caseId = data.caseId as string | undefined;
     let species = (data.species as string) || "poultry";
 
-    let conditionCode = conditionCodeParam;
+    /** When a case is loaded, resolve from latest assessment — not knowledge_matches[0] (wrong for most cases). */
+    let conditionCode: string | null = null;
 
     if (caseId) {
       const { data: caseRow } = await supabase
@@ -33,30 +38,44 @@ export async function POST(request: Request) {
         species = caseRow.animal_type;
       }
 
-      if (!conditionCode) {
-        const { data: assess } = await supabase
-          .from("ai_assessments")
-          .select("knowledge_matches, likely_condition")
-          .eq("case_id", caseId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const { data: assess } = await supabase
+        .from("ai_assessments")
+        .select("knowledge_matches, likely_condition, differential_diagnoses")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        const km = assess?.knowledge_matches as { condition_code?: string }[] | null;
-        if (Array.isArray(km) && km[0]?.condition_code) {
-          conditionCode = km[0].condition_code;
-        }
-        if (!conditionCode && assess?.likely_condition) {
-          const { data: condRow } = await supabase
-            .from("knowledge_conditions")
-            .select("condition_code")
-            .ilike("condition_name", `%${assess.likely_condition}%`)
-            .maybeSingle();
-          conditionCode = condRow?.condition_code ?? null;
-        }
-        if (!condition && assess?.likely_condition) {
-          condition = assess.likely_condition;
-        }
+      const km = assess?.knowledge_matches as KnowledgeMatchLite[] | null;
+      const diffTop = Array.isArray(assess?.differential_diagnoses)
+        ? (assess.differential_diagnoses as { condition?: string }[])[0]?.condition
+        : null;
+      conditionCode = pickConditionCodeForTreatment(
+        km,
+        assess?.likely_condition ?? null,
+        diffTop ?? null
+      );
+
+      if (!conditionCode && assess?.likely_condition) {
+        const { data: condRow } = await supabase
+          .from("knowledge_conditions")
+          .select("condition_code")
+          .ilike("condition_name", `%${assess.likely_condition}%`)
+          .maybeSingle();
+        conditionCode = condRow?.condition_code ?? null;
+      }
+      if (!condition && assess?.likely_condition) {
+        condition = assess.likely_condition;
+      }
+    } else {
+      conditionCode = conditionCodeParam;
+      if (!conditionCode && condition) {
+        const { data: condRow } = await supabase
+          .from("knowledge_conditions")
+          .select("condition_code")
+          .ilike("condition_name", `%${condition}%`)
+          .maybeSingle();
+        conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition : null);
       }
     }
 
@@ -74,6 +93,16 @@ export async function POST(request: Request) {
       species,
       region,
     });
+
+    let resolvedConditionName: string | null = null;
+    if (conditionCode) {
+      const { data: kc } = await supabase
+        .from("knowledge_conditions")
+        .select("condition_name")
+        .eq("condition_code", conditionCode)
+        .maybeSingle();
+      resolvedConditionName = kc?.condition_name ?? null;
+    }
 
     if (caseId) {
       const { data: existing } = await supabase
@@ -110,9 +139,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       treatments,
       warnings,
+      resolved_condition_code: conditionCode,
+      resolved_condition_name: resolvedConditionName,
       message:
         treatments.length > 0
-          ? `Found ${treatments.length} structured option(s) for ${condition || "this condition"}. Availability in ${region} is noted per option.`
+          ? `Found ${treatments.length} structured option(s) for ${resolvedConditionName || condition || "this condition"}. Availability in ${region} is noted per option.`
           : `No database treatment rows for this condition yet.`,
     });
   } catch (error) {
