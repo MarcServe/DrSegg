@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from "react";
 import type { KnowledgeMatch } from "@/lib/ai/schemas";
 import type { TreatmentRow } from "@/lib/ai/treatments";
 
@@ -72,36 +72,59 @@ const CaseContext = createContext<CaseContextType | undefined>(undefined);
 export function CaseProvider({ children }: { children: ReactNode }) {
   const [caseState, setCaseState] = useState<CaseState>(initialState);
 
-  const setCaseId = (id: string) => setCaseState((prev) => ({ ...prev, caseId: id }));
-  const setAnimalType = (type: string) => setCaseState((prev) => ({ ...prev, animalType: type }));
-  const addSymptom = (symptom: string) => setCaseState((prev) => ({ ...prev, symptoms: [...prev.symptoms, symptom] }));
-  const setHealthStatus = (status: HealthStatus, confidence: number) => setCaseState((prev) => ({ ...prev, healthStatus: status, confidence }));
-  const setAnalysisResult = (conditions: string[], severity: string) => setCaseState((prev) => ({ ...prev, possibleConditions: conditions, severity }));
-  const setRegion = (region: string) => setCaseState((prev) => ({ ...prev, region }));
-  const setSymptoms = (symptoms: string[]) =>
-    setCaseState((prev) => ({ ...prev, symptoms }));
-  const setAssessmentDetails = (partial: Partial<Omit<CaseState, "caseId" | "animalType" | "symptoms">>) =>
-    setCaseState((prev) => ({ ...prev, ...partial }));
-  const resetCase = () => setCaseState(initialState);
-
-  return (
-    <CaseContext.Provider
-      value={{
-        caseState,
-        setCaseId,
-        setAnimalType,
-        addSymptom,
-        setHealthStatus,
-        setAnalysisResult,
-        setRegion,
-        setSymptoms,
-        setAssessmentDetails,
-        resetCase,
-      }}
-    >
-      {children}
-    </CaseContext.Provider>
+  const setCaseId = useCallback((id: string) => setCaseState((prev) => ({ ...prev, caseId: id })), []);
+  const setAnimalType = useCallback((type: string) => setCaseState((prev) => ({ ...prev, animalType: type })), []);
+  const addSymptom = useCallback(
+    (symptom: string) => setCaseState((prev) => ({ ...prev, symptoms: [...prev.symptoms, symptom] })),
+    []
   );
+  const setHealthStatus = useCallback(
+    (status: HealthStatus, confidence: number) =>
+      setCaseState((prev) => ({ ...prev, healthStatus: status, confidence })),
+    []
+  );
+  const setAnalysisResult = useCallback(
+    (conditions: string[], severity: string) =>
+      setCaseState((prev) => ({ ...prev, possibleConditions: conditions, severity })),
+    []
+  );
+  const setRegion = useCallback((region: string) => setCaseState((prev) => ({ ...prev, region })), []);
+  const setSymptoms = useCallback((symptoms: string[]) => setCaseState((prev) => ({ ...prev, symptoms })), []);
+  const setAssessmentDetails = useCallback(
+    (partial: Partial<Omit<CaseState, "caseId" | "animalType" | "symptoms">>) =>
+      setCaseState((prev) => ({ ...prev, ...partial })),
+    []
+  );
+  const resetCase = useCallback(() => setCaseState(initialState), []);
+
+  const value = useMemo(
+    () => ({
+      caseState,
+      setCaseId,
+      setAnimalType,
+      addSymptom,
+      setHealthStatus,
+      setAnalysisResult,
+      setRegion,
+      setSymptoms,
+      setAssessmentDetails,
+      resetCase,
+    }),
+    [
+      caseState,
+      setCaseId,
+      setAnimalType,
+      addSymptom,
+      setHealthStatus,
+      setAnalysisResult,
+      setRegion,
+      setSymptoms,
+      setAssessmentDetails,
+      resetCase,
+    ]
+  );
+
+  return <CaseContext.Provider value={value}>{children}</CaseContext.Provider>;
 }
 
 export function useCase() {

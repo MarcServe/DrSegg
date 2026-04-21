@@ -1,6 +1,51 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function GET(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const caseId = searchParams.get("caseId");
+    if (!caseId || !UUID_RE.test(caseId)) {
+      return NextResponse.json({ error: "Valid caseId query parameter required" }, { status: 400 });
+    }
+
+    const { data: existing } = await supabase
+      .from("cases")
+      .select("id")
+      .eq("id", caseId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!existing) {
+      return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    }
+
+    const { data: rows, error } = await supabase
+      .from("followups")
+      .select("id, created_at, notes, status")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return NextResponse.json({ followups: rows ?? [] });
+  } catch (error) {
+    console.error("Followup GET Error:", error);
+    return NextResponse.json({ error: "Failed to load follow-ups" }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();

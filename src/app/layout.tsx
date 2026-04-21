@@ -36,7 +36,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${manrope.variable} antialiased min-h-screen flex flex-col bg-[var(--color-background)] text-[var(--color-on-surface)]`}
+        className={`${inter.variable} ${manrope.variable} antialiased min-h-screen bg-[var(--color-background)] text-[var(--color-on-surface)]`}
       >
         <CaseProvider>
           {children}

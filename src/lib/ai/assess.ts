@@ -60,6 +60,7 @@ export async function runCaseAssessment(
     symptoms: string[];
     region: string;
     visionUrls: string[];
+    followupContext?: string | null;
   }
 ): Promise<CaseAssessmentResult> {
   const knowledge_matches = await matchConditions(supabase, args.animal, args.symptoms, args.region);
@@ -76,6 +77,7 @@ export async function runCaseAssessment(
       region: args.region,
       imageUrl: url,
       knowledgeMatches: knowledge_matches,
+      followupContext: args.followupContext,
     });
     if (oai.ok) {
       model_used = "openai/gpt-4o-mini";
@@ -92,6 +94,7 @@ export async function runCaseAssessment(
           imageBase64: img.base64,
           mediaType: img.mediaType,
           knowledgeMatches: knowledge_matches,
+          followupContext: args.followupContext,
         });
         if (cl.ok) {
           model_used = "anthropic/claude";
@@ -113,6 +116,7 @@ export async function runCaseAssessment(
       symptoms: args.symptoms,
       region: args.region,
       knowledgeMatches: knowledge_matches,
+      followupContext: args.followupContext,
     });
     if (oaiText.ok) {
       model_used = "openai/gpt-4o-mini";
@@ -123,6 +127,7 @@ export async function runCaseAssessment(
         symptoms: args.symptoms,
         region: args.region,
         knowledgeMatches: knowledge_matches,
+        followupContext: args.followupContext,
       });
       if (clText.ok) {
         model_used = "anthropic/claude";

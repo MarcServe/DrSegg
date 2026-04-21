@@ -1,10 +1,43 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
+import type { HealthStatus } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
+import { TreatmentRowDisplay } from "@/components/TreatmentRowDisplay";
 import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
+import type { KnowledgeMatch } from "@/lib/ai/schemas";
+import type { TreatmentRow } from "@/lib/ai/treatments";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Hydrated snapshots may omit newer fields; keep UI consistent */
+function normalizeTreatmentRow(t: TreatmentRow): TreatmentRow {
+  return {
+    drug_name: t.drug_name,
+    generic_name: t.generic_name ?? null,
+    dosage_text: t.dosage_text ?? null,
+    supportive_care: t.supportive_care ?? null,
+    prescription_required: t.prescription_required ?? null,
+    isolation_required: t.isolation_required ?? null,
+    source_reference: t.source_reference ?? null,
+    available_in_your_region: t.available_in_your_region !== false,
+    image_url: t.image_url ?? null,
+  };
+}
+
+type AssessmentHistoryItem = {
+  id?: string;
+  created_at?: string;
+  summary?: string | null;
+  confidence_score?: number | null;
+  severity?: string | null;
+  likely_condition?: string | null;
+  model_name?: string | null;
+};
 
 function severityStyles(severityStr: string) {
   if (severityStr.includes("RED")) {
@@ -22,8 +55,116 @@ function severityStyles(severityStr: string) {
   };
 }
 
-export default function AnalysisResult() {
-  const { caseState } = useCase();
+function AnalysisResultInner() {
+  const searchParams = useSearchParams();
+  const caseParam = searchParams.get("case");
+  const {
+    caseState,
+    setCaseId,
+    setAnimalType,
+    setRegion,
+    setHealthStatus,
+    setAnalysisResult,
+    setAssessmentDetails,
+    setSymptoms,
+  } = useCase();
+  const [hydrateState, setHydrateState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [assessmentHistory, setAssessmentHistory] = useState<AssessmentHistoryItem[]>([]);
+
+  useEffect(() => {
+    if (!caseParam || !UUID_RE.test(caseParam)) {
+      setHydrateState("done");
+      return;
+    }
+
+    let cancelled = false;
+    setHydrateState("loading");
+    (async () => {
+      try {
+        const res = await fetch(`/api/cases/${caseParam}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load case");
+        if (cancelled) return;
+
+        const latest = data.latest_assessment as Record<string, unknown> | null;
+        const history = (data.assessments as AssessmentHistoryItem[]) ?? [];
+        setAssessmentHistory(history);
+
+        const caseRow = data.case as {
+          id: string;
+          animal_type: string;
+          health_status: string | null;
+        };
+
+        setCaseId(caseParam);
+        setAnimalType(caseRow.animal_type);
+        if (typeof data.region === "string") setRegion(data.region);
+
+        if (latest) {
+          const conf = Math.round(Number(latest.confidence_score) || 0);
+          const hs = (caseRow.health_status || "likely_sick") as HealthStatus;
+          setHealthStatus(hs, conf);
+
+          const diffs = (latest.differential_diagnoses as { condition: string; confidence: number }[]) ?? [];
+          const likely = typeof latest.likely_condition === "string" ? latest.likely_condition : "";
+          const poss = likely
+            ? [likely, ...diffs.map((d) => d.condition).filter((x) => x && x !== likely)]
+            : diffs.map((d) => d.condition);
+          const unique = [...new Set(poss)].slice(0, 12);
+
+          setAnalysisResult(unique, String(latest.severity ?? "ORANGE (HIGH)"));
+          setSymptoms([]);
+
+          const km = (latest.knowledge_matches as KnowledgeMatch[]) ?? [];
+          const tr = (latest.treatments_snapshot as TreatmentRow[]) ?? [];
+
+          setAssessmentDetails({
+            summary: typeof latest.summary === "string" ? latest.summary : null,
+            needsMoreInfo: !!latest.needs_more_info,
+            missingInformation: Array.isArray(latest.missing_info)
+              ? (latest.missing_info as string[])
+              : [],
+            redFlags: Array.isArray(latest.red_flags) ? (latest.red_flags as string[]) : [],
+            recommendationType:
+              typeof latest.recommendation_type === "string" ? latest.recommendation_type : null,
+            suggestedNextChecks: Array.isArray(latest.suggested_next_checks)
+              ? (latest.suggested_next_checks as string[])
+              : [],
+            assessmentDisclaimer: typeof latest.disclaimer === "string" ? latest.disclaimer : null,
+            differentialDiagnoses: Array.isArray(latest.differential_diagnoses)
+              ? (latest.differential_diagnoses as { condition: string; confidence: number }[])
+              : [],
+            escalationSuggested:
+              latest.recommendation_type === "emergency" ||
+              latest.recommendation_type === "urgent_vet" ||
+              (Array.isArray(latest.red_flags) && (latest.red_flags as string[]).length > 0),
+            supportingEvidence: Array.isArray(latest.supporting_evidence)
+              ? (latest.supporting_evidence as string[])
+              : [],
+            knowledgeMatches: km,
+            treatments: tr,
+            modelUsed: typeof latest.model_name === "string" ? latest.model_name : null,
+          });
+        }
+        setHydrateState("done");
+      } catch {
+        if (!cancelled) setHydrateState("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    caseParam,
+    setCaseId,
+    setAnimalType,
+    setRegion,
+    setHealthStatus,
+    setAnalysisResult,
+    setAssessmentDetails,
+    setSymptoms,
+  ]);
 
   const hasReal =
     (caseState.possibleConditions?.length ?? 0) > 0 ||
@@ -41,11 +182,13 @@ export default function AnalysisResult() {
     caseState.summary ||
     (hasReal
       ? "Review differentials and evidence below. Structured drug options (if any) are listed under Treatment options — they come from the app database, not free‑written prescriptions."
-      : "Run a new analysis from New case, or open a saved case from Cases for full details.");
+      : "Run a new analysis from New case, or open a saved case with ?case=… in the URL, or go to Cases and open your case file.");
 
   const confidence = caseState.confidence || 0;
 
   const iconKey = caseState.animalType ? animalTypeToIconKey(caseState.animalType) : null;
+
+  const caseQuery = caseState.caseId ? `?case=${caseState.caseId}` : "";
 
   return (
     <>
@@ -69,18 +212,28 @@ export default function AnalysisResult() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-8 space-y-8 pb-32">
+        {hydrateState === "loading" && (
+          <p className="text-sm text-[var(--color-on-surface-variant)] text-center">Loading saved assessment…</p>
+        )}
+        {hydrateState === "error" && (
+          <p className="text-sm text-[var(--color-error)] text-center">
+            Could not load this case. Try opening it from{" "}
+            <Link href="/cases" className="font-bold underline">
+              Cases
+            </Link>
+            .
+          </p>
+        )}
+
         <div className="bg-[var(--color-surface-container-lowest)] p-8 rounded-xl shadow-[0px_12px_32px_rgba(44,105,78,0.08)] space-y-6">
           <div className="flex justify-between items-start gap-4">
             <div className="min-w-0">
               <span className="text-sm font-bold text-[var(--color-primary)] bg-[var(--color-primary-fixed)] px-4 py-1 rounded-full uppercase tracking-widest">
-                Analysis complete
+                {assessmentHistory.length > 1 ? "Latest merged report" : "Analysis complete"}
               </span>
               <h2 className="font-headline text-3xl sm:text-4xl text-[var(--color-primary)] font-extrabold mt-4 leading-tight break-words">
                 {primaryCondition}
               </h2>
-              {caseState.modelUsed && (
-                <p className="text-xs text-[var(--color-outline)] mt-2">Model: {caseState.modelUsed}</p>
-              )}
             </div>
             <div className="flex flex-col items-end gap-3 shrink-0">
               {iconKey && (
@@ -107,7 +260,7 @@ export default function AnalysisResult() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <Link
-              href="/treatment-options"
+              href={caseState.caseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
               className="flex-1 text-center rounded-xl bg-[var(--color-primary)] text-white font-headline font-bold py-4 px-4 hover:opacity-95 active:scale-[0.99]"
             >
               Treatment options
@@ -122,14 +275,59 @@ export default function AnalysisResult() {
             )}
           </div>
           {caseState.caseId && (
-            <Link
-              href={`/records?case=${caseState.caseId}`}
-              className="block text-center text-sm font-semibold text-[var(--color-primary)] underline underline-offset-2"
-            >
-              Attach documents to this case
-            </Link>
+            <>
+              <Link
+                href={`/records${caseQuery}`}
+                className="block text-center text-sm font-semibold text-[var(--color-primary)] underline underline-offset-2"
+              >
+                Attach documents to this case
+              </Link>
+              <Link
+                href={`/follow-up${caseQuery}`}
+                className="block text-center text-sm font-semibold text-[var(--color-on-surface-variant)] hover:text-[var(--color-primary)]"
+              >
+                Add follow-up notes →
+              </Link>
+            </>
           )}
         </div>
+
+        {assessmentHistory.length > 1 && (
+          <section className="space-y-3">
+            <h3 className="font-headline text-lg font-bold text-[var(--color-on-surface)] px-1">
+              Earlier AI reports on this case ({assessmentHistory.length - 1})
+            </h3>
+            <p className="text-xs text-[var(--color-outline)] px-1">
+              New analyses and follow-up context are stored together on one case file.
+            </p>
+            <ul className="space-y-3">
+              {assessmentHistory.slice(1).map((a) => (
+                <li
+                  key={a.id ?? a.created_at}
+                  className="bg-[var(--color-surface-container-low)] rounded-xl p-4 border border-[var(--color-outline-variant)]/15"
+                >
+                  <div className="flex flex-wrap justify-between gap-2 text-xs font-bold text-[var(--color-outline)]">
+                    <span>
+                      {a.created_at ? new Date(a.created_at).toLocaleString() : "Earlier run"}
+                    </span>
+                  </div>
+                  {a.likely_condition && (
+                    <p className="text-sm font-bold text-[var(--color-primary)] mt-2">{a.likely_condition}</p>
+                  )}
+                  <p className="text-sm text-[var(--color-on-surface-variant)] mt-2 leading-relaxed">
+                    {a.summary || "—"}
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-[var(--color-outline)]">
+                    {a.confidence_score != null && (
+                      <span>Confidence {Math.round(Number(a.confidence_score))}%</span>
+                    )}
+                    {a.severity && <span>{a.severity}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {caseState.differentialDiagnoses.length > 0 && (
           <section className="space-y-3">
@@ -207,24 +405,24 @@ export default function AnalysisResult() {
         {caseState.treatments.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-2 px-1">
-              <h3 className="font-headline text-lg font-bold text-[var(--color-on-surface)]">
-                Structured treatment snapshot
-              </h3>
-              <Link href="/treatment-options" className="text-sm font-bold text-[var(--color-primary)] hover:underline">
-                Details →
+              <h3 className="font-headline text-lg font-bold text-[var(--color-on-surface)]">Treatment plan</h3>
+              <Link
+                href={caseState.caseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
+                className="text-sm font-bold text-[var(--color-primary)] hover:underline"
+              >
+                Full list →
               </Link>
             </div>
             <p className="text-xs text-[var(--color-outline)] px-1">
-              From your region-matched database rows. Confirm dosing and legality with a veterinarian.
+              Structured options from the knowledge base — images and names when available. Confirm dosing and legality with a veterinarian.
             </p>
-            <ul className="space-y-2">
-              {caseState.treatments.slice(0, 5).map((t) => (
-                <li key={t.drug_name} className="bg-[var(--color-surface-container-low)] rounded-lg p-4">
-                  <p className="font-bold text-[var(--color-on-surface)]">{t.drug_name}</p>
-                  {t.generic_name && (
-                    <p className="text-sm text-[var(--color-on-surface-variant)]">Active: {t.generic_name}</p>
-                  )}
-                  {t.dosage_text && <p className="text-sm mt-1 text-[var(--color-on-surface)]">{t.dosage_text}</p>}
+            <ul className="space-y-4">
+              {caseState.treatments.slice(0, 5).map((t, idx) => (
+                <li
+                  key={`${t.drug_name}-${idx}-${t.generic_name ?? ""}-${t.dosage_text?.slice(0, 12) ?? ""}`}
+                  className="bg-[var(--color-surface-container-lowest)] rounded-xl border border-[var(--color-outline-variant)]/15 p-5 shadow-sm"
+                >
+                  <TreatmentRowDisplay t={normalizeTreatmentRow(t)} />
                 </li>
               ))}
             </ul>
@@ -244,7 +442,7 @@ export default function AnalysisResult() {
 
         <div className="flex flex-col gap-3 pt-4">
           <Link
-            href="/guided-inspection"
+            href={caseState.caseId ? `/guided-inspection?case=${caseState.caseId}` : "/guided-inspection"}
             className="text-center font-semibold text-[var(--color-primary)] py-2 hover:underline"
           >
             Guided inspection checklist
@@ -257,5 +455,17 @@ export default function AnalysisResult() {
 
       <BottomNavBar />
     </>
+  );
+}
+
+export default function AnalysisResult() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen pt-28 text-center text-[var(--color-on-surface-variant)]">Loading…</div>
+      }
+    >
+      <AnalysisResultInner />
+    </Suspense>
   );
 }

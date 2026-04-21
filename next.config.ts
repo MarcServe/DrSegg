@@ -12,13 +12,7 @@ const supabaseHost = (() => {
 
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-      ...(supabaseHost ? [{ protocol: "https" as const, hostname: supabaseHost }] : []),
-    ],
+    remotePatterns: [...(supabaseHost ? [{ protocol: "https" as const, hostname: supabaseHost }] : [])],
   },
 };
 

@@ -15,12 +15,50 @@ export async function POST(request: Request) {
 
     const data = await request.json();
     const region = (data.region as string) || "Northern Highlands District";
-    const condition = (data.condition as string) || "";
+    let condition = (data.condition as string) || "";
     const conditionCodeParam = (data.condition_code as string)?.trim() || null;
     const caseId = data.caseId as string | undefined;
-    const species = (data.species as string) || "poultry";
+    let species = (data.species as string) || "poultry";
 
     let conditionCode = conditionCodeParam;
+
+    if (caseId) {
+      const { data: caseRow } = await supabase
+        .from("cases")
+        .select("animal_type")
+        .eq("id", caseId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (caseRow?.animal_type) {
+        species = caseRow.animal_type;
+      }
+
+      if (!conditionCode) {
+        const { data: assess } = await supabase
+          .from("ai_assessments")
+          .select("knowledge_matches, likely_condition")
+          .eq("case_id", caseId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const km = assess?.knowledge_matches as { condition_code?: string }[] | null;
+        if (Array.isArray(km) && km[0]?.condition_code) {
+          conditionCode = km[0].condition_code;
+        }
+        if (!conditionCode && assess?.likely_condition) {
+          const { data: condRow } = await supabase
+            .from("knowledge_conditions")
+            .select("condition_code")
+            .ilike("condition_name", `%${assess.likely_condition}%`)
+            .maybeSingle();
+          conditionCode = condRow?.condition_code ?? null;
+        }
+        if (!condition && assess?.likely_condition) {
+          condition = assess.likely_condition;
+        }
+      }
+    }
 
     if (!conditionCode && condition) {
       const { data: condRow } = await supabase
@@ -58,8 +96,15 @@ export async function POST(request: Request) {
     const warnings: string[] = [];
     if (treatments.length === 0) {
       warnings.push(
-        "No region-specific drug rows matched this condition. Provide supportive care and consult a veterinarian for prescriptions and dosing."
+        "No structured treatment rows matched this condition in the database yet. Provide supportive care and consult a veterinarian for prescriptions and dosing."
       );
+    } else {
+      const notLocal = treatments.filter((t) => t.available_in_your_region === false).length;
+      if (notLocal > 0) {
+        warnings.push(
+          `${notLocal} option(s) list products that may not be registered or stocked in ${region}. Confirm availability and legality with a veterinarian or supplier.`
+        );
+      }
     }
 
     return NextResponse.json({
@@ -67,8 +112,8 @@ export async function POST(request: Request) {
       warnings,
       message:
         treatments.length > 0
-          ? `Found ${treatments.length} structured option(s) for ${condition || "condition"} in ${region}.`
-          : `No database treatment rows for this lookup in ${region}.`,
+          ? `Found ${treatments.length} structured option(s) for ${condition || "this condition"}. Availability in ${region} is noted per option.`
+          : `No database treatment rows for this condition yet.`,
     });
   } catch (error) {
     console.error("Treatment Error:", error);

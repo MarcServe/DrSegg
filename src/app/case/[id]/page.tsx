@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BottomNavBar from "@/components/BottomNavBar";
+import { CaseNameEditor } from "@/components/CaseNameEditor";
 import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/server";
+import {
+  CASE_DETAIL_PAGE_SELECT_NO_NAME,
+  CASE_DETAIL_PAGE_SELECT_WITH_NAME,
+  isMissingDisplayNameColumn,
+} from "@/lib/case-detail-select";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -10,22 +16,21 @@ export default async function CaseDetail({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: row, error } = await supabase
+  let { data: row, error } = await supabase
     .from("cases")
-    .select(
-      `
-      id,
-      animal_type,
-      health_status,
-      status,
-      created_at,
-      case_analysis ( possible_conditions, severity ),
-      ai_assessments ( summary, confidence_score, recommendation_type, needs_more_info ),
-      followups ( created_at, notes, status )
-    `
-    )
+    .select(CASE_DETAIL_PAGE_SELECT_WITH_NAME)
     .eq("id", id)
     .maybeSingle();
+
+  if (error && isMissingDisplayNameColumn(error)) {
+    const r2 = await supabase
+      .from("cases")
+      .select(CASE_DETAIL_PAGE_SELECT_NO_NAME)
+      .eq("id", id)
+      .maybeSingle();
+    row = r2.data ? { ...r2.data, display_name: null } : null;
+    error = r2.error;
+  }
 
   if (error || !row) {
     notFound();
@@ -34,6 +39,12 @@ export default async function CaseDetail({ params }: PageProps) {
   const { data: attachedDocs } = await supabase
     .from("farm_documents")
     .select("id, title, doc_type, created_at")
+    .eq("case_id", id)
+    .order("created_at", { ascending: false });
+
+  const { data: reportHistory } = await supabase
+    .from("ai_assessments")
+    .select("id, created_at, summary, confidence_score, severity, likely_condition")
     .eq("case_id", id)
     .order("created_at", { ascending: false });
 
@@ -46,6 +57,7 @@ export default async function CaseDetail({ params }: PageProps) {
     | null;
   const aiAssessment = Array.isArray(aiRows) ? aiRows[0] : aiRows;
   const followups = (Array.isArray(row.followups) ? row.followups : []) as {
+    id: string;
     created_at: string;
     notes: string | null;
     status: string | null;
@@ -55,25 +67,33 @@ export default async function CaseDetail({ params }: PageProps) {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  const timeline = sortedFollowups.slice(0, 5).map((f, idx) => ({
-    day:
-      idx === 0
-        ? "Latest"
-        : new Date(f.created_at).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-          }),
-    desc: f.notes || "Follow-up recorded",
-    status:
-      f.status === "improving"
-        ? "Improving"
-        : f.status === "worsening"
-          ? "Worsening"
-          : "Unchanged",
-  }));
+  const caseTitle =
+    row.display_name?.trim() ||
+    `${row.animal_type} · ${row.created_at ? new Date(row.created_at).toLocaleDateString() : "case"}`;
+
+  const timeline: { key: string; day: string; desc: string; status: string }[] = sortedFollowups
+    .slice(0, 5)
+    .map((f, idx) => ({
+      key: f.id,
+      day:
+        idx === 0
+          ? "Latest"
+          : new Date(f.created_at).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            }),
+      desc: f.notes || "Follow-up recorded",
+      status:
+        f.status === "improving"
+          ? "Improving"
+          : f.status === "worsening"
+            ? "Worsening"
+            : "Unchanged",
+    }));
 
   if (timeline.length === 0) {
     timeline.push({
+      key: "case-start",
       day: "Start",
       desc: `Case opened — ${row.animal_type}`,
       status: "Unchanged",
@@ -106,12 +126,12 @@ export default async function CaseDetail({ params }: PageProps) {
           >
             arrow_back
           </Link>
-          <Link
-            href="/cases"
-            className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-xl cursor-pointer hover:opacity-80"
-          >
-            Case #{row.id.slice(0, 8)}
-          </Link>
+          <div className="min-w-0 flex flex-col items-end gap-1 max-w-[70%]">
+            <span className="text-[#0f5238] dark:text-emerald-400 font-manrope font-extrabold text-lg truncate w-full text-right">
+              {caseTitle}
+            </span>
+            <span className="text-xs text-[var(--color-outline)] font-mono">#{row.id.slice(0, 8)}</span>
+          </div>
         </div>
       </header>
 
@@ -135,9 +155,7 @@ export default async function CaseDetail({ params }: PageProps) {
                 ? new Date(row.created_at).toLocaleDateString()
                 : ""}
             </span>
-            <h2 className="text-3xl font-extrabold font-manrope text-[var(--color-primary)] tracking-tight capitalize">
-              {row.animal_type}
-            </h2>
+            <CaseNameEditor caseId={id} initialName={row.display_name} animalType={row.animal_type} />
             <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">{subtitle}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className="bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed-variant)] px-3 py-1 rounded-full text-[10px] font-bold uppercase">
@@ -191,6 +209,10 @@ export default async function CaseDetail({ params }: PageProps) {
 
         <section className="space-y-4 px-2">
           <div className="flex flex-wrap gap-3 text-sm font-bold">
+            <Link href={`/new-case?case=${id}`} className="text-[var(--color-primary)] hover:underline">
+              Add notes &amp; media
+            </Link>
+            <span className="text-[var(--color-outline)]">·</span>
             <Link
               href={`/follow-up?case=${id}`}
               className="text-[var(--color-primary)] hover:underline"
@@ -202,11 +224,54 @@ export default async function CaseDetail({ params }: PageProps) {
               Treatments
             </Link>
             <span className="text-[var(--color-outline)]">·</span>
-            <Link href="/analysis-result" className="text-[var(--color-primary)] hover:underline">
+            <Link href={`/analysis-result?case=${id}`} className="text-[var(--color-primary)] hover:underline">
               Full analysis
+            </Link>
+            <span className="text-[var(--color-outline)]">·</span>
+            <Link href={`/guided-inspection?case=${id}`} className="text-[var(--color-primary)] hover:underline">
+              Guided inspection
             </Link>
           </div>
         </section>
+
+        {reportHistory && reportHistory.length > 0 && (
+          <section className="space-y-4 px-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h2 className="text-xl font-bold font-manrope">Merged reports</h2>
+              <Link href={`/analysis-result?case=${id}`} className="text-sm font-bold text-[var(--color-primary)] hover:underline">
+                Full detail view
+              </Link>
+            </div>
+            <p className="text-sm text-[var(--color-on-surface-variant)]">
+              Each run adds a new assessment; newest is first. Follow-up notes and media are included when you re-analyze.
+            </p>
+            <ul className="space-y-3">
+              {reportHistory.map((r, i) => (
+                <li
+                  key={r.id}
+                  className="bg-[var(--color-surface-container-low)] rounded-xl p-4 border border-[var(--color-outline-variant)]/20"
+                >
+                  <div className="flex flex-wrap justify-between gap-2 text-xs font-bold uppercase text-[var(--color-outline)]">
+                    <span>
+                      {i === 0 ? "Latest" : `Report ${reportHistory.length - i}`}
+                      {r.created_at ? ` · ${new Date(r.created_at).toLocaleString()}` : ""}
+                    </span>
+                  </div>
+                  {r.likely_condition && (
+                    <p className="text-sm font-bold text-[var(--color-primary)] mt-2">{r.likely_condition}</p>
+                  )}
+                  <p className="text-sm text-[var(--color-on-surface-variant)] mt-2 line-clamp-4">
+                    {r.summary || "No summary stored."}
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-[var(--color-outline)]">
+                    {r.confidence_score != null && <span>Confidence {Math.round(Number(r.confidence_score))}%</span>}
+                    {r.severity && <span>{r.severity}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="space-y-6">
           <Link
@@ -218,7 +283,7 @@ export default async function CaseDetail({ params }: PageProps) {
           <div className="space-y-4">
             {timeline.map((item, idx) => (
               <div
-                key={idx}
+                key={item.key}
                 className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors"
               >
                 <div className="flex items-center gap-6">

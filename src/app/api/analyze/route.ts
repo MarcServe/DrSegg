@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runCaseAssessment } from "@/lib/ai/assess";
+import { persistCaseAssessmentArtifacts, healthStatusFromAssessment, mapCaseStatus } from "@/lib/persist-case-assessment";
+import { formatFollowupsForPrompt } from "@/lib/format-followups";
 
-function mapCaseStatus(recommendationType: string | undefined): string {
-  if (recommendationType === "emergency" || recommendationType === "urgent_vet") return "escalated";
-  if (recommendationType === "pending_more_info") return "pending_more_info";
-  return "open";
-}
-
-function healthStatusFromAssessment(h: string): "healthy" | "mild_concern" | "likely_sick" | "critical" {
-  if (h === "healthy" || h === "mild_concern" || h === "likely_sick" || h === "critical") {
-    return h;
-  }
-  return "likely_sick";
-}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
   try {
@@ -27,15 +18,12 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const animal = data.animal as string;
     const rawSymptoms = (data.symptoms as string[]) ?? [];
     const symptoms = rawSymptoms.map((s) => String(s).trim()).filter(Boolean);
     const imageUrlsFromClient = (data.image_urls as string[]) ?? [];
     const storagePaths = (data.storage_paths as string[]) ?? [];
-
-    if (!animal) {
-      return NextResponse.json({ error: "animal is required" }, { status: 400 });
-    }
+    const existingCaseId =
+      typeof data.case_id === "string" && UUID_RE.test(data.case_id) ? data.case_id : null;
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -58,14 +46,119 @@ export async function POST(request: Request) {
       }
     }
 
+    let animal = typeof data.animal === "string" ? data.animal.trim() : "";
+    let followupContext: string | undefined;
+    let followupRows: { created_at: string; notes: string | null; status: string | null }[] = [];
+
+    if (existingCaseId) {
+      const { data: existingCase, error: caseErr } = await supabase
+        .from("cases")
+        .select("id, animal_type")
+        .eq("id", existingCaseId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (caseErr || !existingCase) {
+        return NextResponse.json({ error: "Case not found" }, { status: 404 });
+      }
+
+      if (!animal) {
+        animal = existingCase.animal_type;
+      }
+
+      const { data: fu } = await supabase
+        .from("followups")
+        .select("created_at, notes, status")
+        .eq("case_id", existingCaseId)
+        .order("created_at", { ascending: true });
+
+      followupRows = fu ?? [];
+
+      const { data: lastAi } = await supabase
+        .from("ai_assessments")
+        .select("summary")
+        .eq("case_id", existingCaseId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const fp = formatFollowupsForPrompt(followupRows);
+      const prior = lastAi?.summary?.trim();
+      followupContext = [
+        prior && `Previous AI assessment summary:\n${prior}`,
+        fp && `Follow-up log (oldest first):\n${fp}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const hasInputs = symptoms.length > 0 || visionUrls.length > 0 || followupRows.length > 0;
+      if (!hasInputs) {
+        return NextResponse.json(
+          {
+            error:
+              "Add symptoms or media on New case, or save at least one follow-up note before re-running analysis.",
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!animal) {
+        return NextResponse.json({ error: "animal is required" }, { status: 400 });
+      }
+    }
+
+    let symptomsForMatch = symptoms;
+    if (symptomsForMatch.length === 0 && followupRows.length > 0) {
+      const lastNote = followupRows[followupRows.length - 1]?.notes?.trim();
+      symptomsForMatch = lastNote
+        ? [lastNote.slice(0, 500)]
+        : ["Ongoing case — see follow-up log in assessment prompt."];
+    }
+
     const outcome = await runCaseAssessment(supabase, {
       animal,
-      symptoms,
+      symptoms: symptomsForMatch,
       region,
       visionUrls,
+      followupContext: followupContext || null,
     });
 
     const a = outcome.assessment;
+
+    if (existingCaseId) {
+      const persisted = await persistCaseAssessmentArtifacts(supabase, {
+        caseId: existingCaseId,
+        region,
+        outcome,
+        symptoms,
+        storagePaths,
+        updateCaseRow: true,
+      });
+
+      return NextResponse.json({
+        case_id: existingCaseId,
+        health_status: persisted.health_status,
+        confidence: persisted.confidence,
+        requires_more_data: persisted.requiresMoreData,
+        possible_conditions: persisted.possible_conditions,
+        severity: persisted.severity,
+        summary: a.summary,
+        differential_diagnoses: a.differential_diagnoses,
+        supporting_evidence: a.supporting_evidence,
+        missing_information: a.missing_information,
+        red_flags: a.red_flags,
+        needs_more_info: a.needs_more_info,
+        suggested_next_checks: a.suggested_next_checks,
+        recommendation_type: a.recommendation_type,
+        knowledge_matches: outcome.knowledge_matches,
+        treatments: outcome.treatments,
+        model_used: outcome.model_used,
+        disclaimer: outcome.disclaimer,
+        message: "Follow-up context included. Assessment updated for this case.",
+        reassessment: true,
+      });
+    }
+
     const health_status = healthStatusFromAssessment(a.health_status);
     const confidence = Math.round(a.confidence);
     const possible_conditions = a.possible_conditions;
@@ -89,139 +182,14 @@ export async function POST(request: Request) {
     if (caseError) throw caseError;
     const caseId = caseData.id;
 
-    const rows: { case_id: string; type: string; transcription?: string; file_url?: string }[] = [];
-
-    for (const sym of symptoms) {
-      rows.push({ case_id: caseId, type: "text", transcription: sym });
-    }
-    storagePaths.forEach((p, i) => {
-      const isVideo = /\.(mp4|webm|mov|mkv)$/i.test(p);
-      rows.push({
-        case_id: caseId,
-        type: isVideo ? "video" : "image",
-        file_url: p,
-        transcription: isVideo ? `Video ${i + 1}` : `Image ${i + 1}`,
-      });
+    await persistCaseAssessmentArtifacts(supabase, {
+      caseId,
+      region,
+      outcome,
+      symptoms,
+      storagePaths,
+      updateCaseRow: false,
     });
-
-    if (rows.length > 0) {
-      const { error: inputError } = await supabase.from("case_inputs").insert(rows);
-      if (inputError) throw inputError;
-    }
-
-    const recommendationsList: string[] = [
-      ...a.suggested_next_checks,
-      outcome.disclaimer,
-    ];
-
-    if (health_status !== "healthy") {
-      const { error: analysisError } = await supabase.from("case_analysis").insert({
-        case_id: caseId,
-        possible_conditions,
-        severity,
-        recommendations: recommendationsList,
-      });
-      if (analysisError) throw analysisError;
-    }
-
-    const likely =
-      a.differential_diagnoses?.[0]?.condition ?? possible_conditions[0] ?? null;
-
-    const { error: aiErr } = await supabase.from("ai_assessments").insert({
-      case_id: caseId,
-      model_name: outcome.model_used,
-      summary: a.summary,
-      likely_condition: likely,
-      differential_diagnoses: a.differential_diagnoses ?? [],
-      confidence_score: confidence,
-      severity,
-      needs_more_info: a.needs_more_info ?? false,
-      missing_info: a.missing_information ?? [],
-      suggested_next_checks: a.suggested_next_checks ?? [],
-      red_flags: a.red_flags ?? [],
-      supporting_evidence: a.supporting_evidence ?? [],
-      recommendation_type: a.recommendation_type ?? "monitor",
-      knowledge_matches: outcome.knowledge_matches,
-      treatments_snapshot: outcome.treatments,
-      disclaimer: outcome.disclaimer,
-    });
-    if (aiErr) throw aiErr;
-
-    const recRows: {
-      case_id: string;
-      recommendation_type: string;
-      title: string;
-      description: string;
-      source_type: string;
-      priority: number;
-    }[] = [];
-
-    let p = 1;
-    for (const t of outcome.treatments) {
-      recRows.push({
-        case_id: caseId,
-        recommendation_type: "drug",
-        title: t.drug_name,
-        description: [
-          t.generic_name ? `Active: ${t.generic_name}` : "",
-          t.dosage_text ?? "",
-          t.supportive_care ?? "",
-          t.prescription_required ? "Prescription may be required — follow local law and vet advice." : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-        source_type: "database",
-        priority: p++,
-      });
-    }
-
-    if (a.needs_more_info) {
-      recRows.push({
-        case_id: caseId,
-        recommendation_type: "monitoring",
-        title: "More information needed",
-        description: (a.missing_information ?? []).join("; ") || "Add detail or media and re-run analysis.",
-        source_type: "ai",
-        priority: 0,
-      });
-    }
-
-    if (a.recommendation_type === "emergency" || (a.red_flags?.length ?? 0) > 0) {
-      recRows.push({
-        case_id: caseId,
-        recommendation_type: "escalation",
-        title: "Seek veterinary care",
-        description: "Escalate to a qualified veterinarian urgently based on signs or uncertainty.",
-        source_type: "system",
-        priority: -1,
-      });
-    }
-
-    if (recRows.length > 0) {
-      const { error: rErr } = await supabase.from("case_recommendations").insert(recRows);
-      if (rErr) throw rErr;
-    }
-
-    if (caseStatus === "escalated") {
-      await supabase.from("vet_reviews").insert({
-        case_id: caseId,
-        review_status: "pending",
-      });
-    }
-
-    if (outcome.treatments.length > 0) {
-      await supabase.from("treatment_plans").insert({
-        case_id: caseId,
-        region,
-        treatments: outcome.treatments.map((t) => ({
-          drug: t.drug_name,
-          generic: t.generic_name,
-          dosage: t.dosage_text,
-          supportive: t.supportive_care,
-        })),
-        dosage: { note: "From structured database — confirm with a veterinarian" },
-      });
-    }
 
     return NextResponse.json({
       case_id: caseId,

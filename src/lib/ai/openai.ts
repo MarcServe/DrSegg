@@ -18,6 +18,7 @@ export async function callOpenAiAssessmentText(args: {
   symptoms: string[];
   region: string;
   knowledgeMatches: KnowledgeMatch[];
+  followupContext?: string | null;
 }): Promise<{ ok: true; data: LlmAssessmentJson } | { ok: false; error: string }> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return { ok: false, error: "OPENAI_API_KEY missing" };
@@ -26,7 +27,8 @@ export async function callOpenAiAssessmentText(args: {
     args.animal,
     args.symptoms,
     args.region,
-    args.knowledgeMatches
+    args.knowledgeMatches,
+    args.followupContext
   );
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -65,6 +67,7 @@ export async function callOpenAiAssessmentVision(args: {
   region: string;
   imageUrl: string;
   knowledgeMatches: KnowledgeMatch[];
+  followupContext?: string | null;
 }): Promise<{ ok: true; data: LlmAssessmentJson } | { ok: false; error: string }> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return { ok: false, error: "OPENAI_API_KEY missing" };
@@ -73,7 +76,8 @@ export async function callOpenAiAssessmentVision(args: {
     args.animal,
     args.symptoms,
     args.region,
-    args.knowledgeMatches
+    args.knowledgeMatches,
+    args.followupContext
   );
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {

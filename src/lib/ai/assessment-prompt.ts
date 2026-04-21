@@ -57,15 +57,19 @@ export function buildAssessmentUserMessage(
   animal: string,
   symptoms: string[],
   region: string,
-  knowledgeMatches: KnowledgeMatch[]
+  knowledgeMatches: KnowledgeMatch[],
+  followupContext?: string | null
 ): string {
   const kb = formatKnowledgeBaseSection(knowledgeMatches);
   const signs = symptoms.length ? symptoms.join("; ") : "none listed";
+  const followupBlock = followupContext?.trim()
+    ? `\n\n## Prior follow-up log and prior AI summary (use for trajectory, progression, and urgency)\n${followupContext.trim()}`
+    : "";
 
   return `## Case input
 - Animal species: ${animal}
 - Region / locality context: ${region}
-- Reported signs / symptoms: ${signs}
+- Reported signs / symptoms: ${signs}${followupBlock}
 
 ## Retrieval
 ${kb}

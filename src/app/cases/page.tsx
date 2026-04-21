@@ -1,10 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import BottomNavBar from "@/components/BottomNavBar";
+import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/server";
-
-const PLACEHOLDER =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuD0bT2yT4JLfFfg-uUKJDYOX5-RxM1idnEmsaY3sQIQfCA6_lJnA9vUXLVw9jEt5Vh3v-ur5iUhtT3uM8cvhiQKUcrXo0dJX0_ZA13CaDFePYwptSjXfWf_mQYXUWOkuuTUev3rrnH7GcfczLcLOITw13ZyJEBxtBNR5VlDqYzARacqhHpk2u1p3ysfHkdwjS1SfmqfPvUbdP9ejH4Aqu6yWlq75xGuVohJyByOryay-sHb1VddWZEQ3rxTEDThtFALpNB8miY-r9k";
+import { isMissingDisplayNameColumn } from "@/lib/case-detail-select";
 
 function statusBadge(health: string | null) {
   switch (health) {
@@ -35,10 +33,20 @@ function statusBadge(health: string | null) {
 
 export default async function Cases() {
   const supabase = await createClient();
-  const { data: cases } = await supabase
+  let { data: cases, error: casesErr } = await supabase
     .from("cases")
-    .select("id, animal_type, health_status, created_at")
-    .order("created_at", { ascending: false });
+    .select("id, animal_type, health_status, created_at, display_name")
+    .order("created_at", { ascending: false })
+    .limit(10000);
+
+  if (casesErr && isMissingDisplayNameColumn(casesErr)) {
+    const r2 = await supabase
+      .from("cases")
+      .select("id, animal_type, health_status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(10000);
+    cases = r2.data?.map((c) => ({ ...c, display_name: null as string | null })) ?? [];
+  }
 
   const list = cases ?? [];
 
@@ -86,6 +94,7 @@ export default async function Cases() {
         ) : (
           <div className="space-y-4">
             {list.map((c) => {
+              const iconKey = animalTypeToIconKey(c.animal_type);
               const badge = statusBadge(c.health_status);
               const date = c.created_at
                 ? new Date(c.created_at).toLocaleDateString(undefined, {
@@ -101,12 +110,16 @@ export default async function Cases() {
                   className="bg-[var(--color-surface-container-lowest)] p-4 rounded-xl flex items-center justify-between hover:bg-[var(--color-surface-container-low)] transition-colors shadow-sm border border-[var(--color-outline-variant)]/15"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden relative">
-                      <Image src={PLACEHOLDER} alt={c.animal_type} fill className="object-cover" />
+                    <div className="w-14 h-14 rounded-full overflow-hidden relative bg-[var(--color-surface-container-highest)] flex items-center justify-center shrink-0">
+                      {iconKey ? (
+                        <AnimalIcon animal={iconKey} size={56} label={c.animal_type} />
+                      ) : (
+                        <span className="material-symbols-outlined text-3xl text-[var(--color-primary)]">pets</span>
+                      )}
                     </div>
                     <div>
                       <p className="font-bold text-[var(--color-on-surface)] text-lg capitalize">
-                        {c.animal_type}
+                        {c.display_name?.trim() || c.animal_type}
                       </p>
                       <p className="text-sm text-[var(--color-on-surface-variant)] capitalize">
                         {c.health_status?.replace(/_/g, " ") ?? "Recorded"}

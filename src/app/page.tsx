@@ -241,9 +241,14 @@ export default async function Home() {
                 href="/cases"
                 className="text-xs font-bold uppercase tracking-widest text-[var(--color-outline)] cursor-pointer hover:text-[var(--color-primary)]"
               >
-                View All
+                {user && caseCount > 0 ? `View all (${caseCount})` : "View all"}
               </Link>
             </div>
+            {user && caseCount > 2 ? (
+              <p className="text-xs text-[var(--color-outline)] -mt-2">
+                Showing your 2 most recent cases — open the full list for all.
+              </p>
+            ) : null}
             <div className="space-y-4">
               {!user && (
                 <p className="text-sm text-[var(--color-on-surface-variant)]">

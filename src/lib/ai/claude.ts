@@ -17,6 +17,7 @@ export async function callClaudeAssessmentText(args: {
   symptoms: string[];
   region: string;
   knowledgeMatches: KnowledgeMatch[];
+  followupContext?: string | null;
 }): Promise<{ ok: true; data: LlmAssessmentJson } | { ok: false; error: string }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "ANTHROPIC_API_KEY missing" };
@@ -25,7 +26,8 @@ export async function callClaudeAssessmentText(args: {
     args.animal,
     args.symptoms,
     args.region,
-    args.knowledgeMatches
+    args.knowledgeMatches,
+    args.followupContext
   );
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -65,6 +67,7 @@ export async function callClaudeAssessmentVision(args: {
   imageBase64: string;
   mediaType: string;
   knowledgeMatches: KnowledgeMatch[];
+  followupContext?: string | null;
 }): Promise<{ ok: true; data: LlmAssessmentJson } | { ok: false; error: string }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "ANTHROPIC_API_KEY missing" };
@@ -73,7 +76,8 @@ export async function callClaudeAssessmentVision(args: {
     args.animal,
     args.symptoms,
     args.region,
-    args.knowledgeMatches
+    args.knowledgeMatches,
+    args.followupContext
   );
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {

@@ -7,6 +7,8 @@ import { useCase } from "@/context/CaseContext";
 import { AnimalIcon } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/client";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function parseSymptoms(text: string): string[] {
   return text
     .split(/[\n,]+/)
@@ -30,8 +32,13 @@ function NewCaseForm() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [symptomText, setSymptomText] = useState("");
   const [mediaFiles, setMediaFiles] = useState<{ file: File; kind: "image" | "video" }[]>([]);
+  const [speechListening, setSpeechListening] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const imageCaptureRef = useRef<HTMLInputElement>(null);
+  const videoCaptureRef = useRef<HTMLInputElement>(null);
+  const speechRecRef = useRef<{ stop: () => void } | null>(null);
+  const handledCameraParam = useRef<string | null>(null);
 
   useEffect(() => {
     const animal = searchParams.get("animal");
@@ -39,6 +46,63 @@ function NewCaseForm() {
       setAnimalType(animal);
     }
   }, [searchParams, setAnimalType]);
+
+  useEffect(() => {
+    const c = searchParams.get("case");
+    if (c && UUID_RE.test(c) && c !== caseState.caseId) {
+      setCaseId(c);
+    }
+  }, [searchParams, setCaseId, caseState.caseId]);
+
+  useEffect(() => {
+    const c = searchParams.get("case");
+    if (!c || !UUID_RE.test(c)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/cases/${c}`);
+        const data = await res.json();
+        if (!res.ok || cancelled) return;
+        const at = data.case?.animal_type as string | undefined;
+        if (at) setAnimalType(at);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setAnimalType]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const focusSymptoms = () => {
+      if (window.location.hash === "#symptoms-input") {
+        const el = document.getElementById("symptoms-input");
+        el?.focus();
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    };
+    focusSymptoms();
+    window.addEventListener("hashchange", focusSymptoms);
+    return () => window.removeEventListener("hashchange", focusSymptoms);
+  }, []);
+
+  useEffect(() => {
+    const cam = searchParams.get("camera");
+    if (!cam || (cam !== "photo" && cam !== "video")) {
+      handledCameraParam.current = null;
+      return;
+    }
+    if (handledCameraParam.current === cam) return;
+    handledCameraParam.current = cam;
+    const t = window.setTimeout(() => {
+      if (cam === "photo") imageCaptureRef.current?.click();
+      if (cam === "video") videoCaptureRef.current?.click();
+      router.replace("/new-case", { scroll: false });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [searchParams, router]);
 
   const getButtonClasses = (animal: string) => {
     const isActive = caseState.animalType === animal;
@@ -88,15 +152,20 @@ function NewCaseForm() {
         }
       }
 
+      const analyzeBody: Record<string, unknown> = {
+        animal: caseState.animalType,
+        symptoms,
+        storage_paths: storagePaths,
+      };
+      if (caseState.caseId && UUID_RE.test(caseState.caseId)) {
+        analyzeBody.case_id = caseState.caseId;
+      }
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({
-          animal: caseState.animalType,
-          symptoms,
-          storage_paths: storagePaths,
-        }),
+        body: JSON.stringify(analyzeBody),
       });
 
       const data = await response.json();
@@ -162,6 +231,72 @@ function NewCaseForm() {
     e.target.value = "";
   };
 
+  const toggleSpeech = () => {
+    if (typeof window === "undefined") return;
+    if (speechListening && speechRecRef.current) {
+      speechRecRef.current.stop();
+      speechRecRef.current = null;
+      setSpeechListening(false);
+      return;
+    }
+    const w = window as unknown as {
+      SpeechRecognition?: new () => {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        start: () => void;
+        stop: () => void;
+        onresult: ((ev: unknown) => void) | null;
+        onend: (() => void) | null;
+        onerror: (() => void) | null;
+      };
+      webkitSpeechRecognition?: new () => {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        start: () => void;
+        stop: () => void;
+        onresult: ((ev: unknown) => void) | null;
+        onend: (() => void) | null;
+        onerror: (() => void) | null;
+      };
+    };
+    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Ctor) {
+      alert("Voice input is not supported in this browser. Try Chrome on desktop, or type symptoms below.");
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.onresult = (event: unknown) => {
+      const ev = event as {
+        resultIndex: number;
+        results: { length: number; [i: number]: { 0: { transcript: string } } };
+      };
+      let text = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+      }
+      const chunk = text.trim();
+      if (chunk) {
+        setSymptomText((prev) => (prev.trim() ? `${prev.trim()}, ${chunk}` : chunk));
+      }
+    };
+    rec.onend = () => {
+      setSpeechListening(false);
+      speechRecRef.current = null;
+    };
+    rec.onerror = () => {
+      setSpeechListening(false);
+      speechRecRef.current = null;
+    };
+    speechRecRef.current = rec;
+    rec.start();
+    setSpeechListening(true);
+  };
+
   return (
     <>
       <header className="flex justify-between items-center px-6 py-4 w-full bg-[#f9faf6] dark:bg-stone-950 fixed top-0 z-50">
@@ -188,6 +323,21 @@ function NewCaseForm() {
       </header>
 
       <main className="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-12">
+        {caseState.caseId && UUID_RE.test(caseState.caseId) && (
+          <div className="rounded-xl border border-[var(--color-primary)]/35 bg-[var(--color-primary-container)]/10 px-4 py-3 text-sm">
+            <p className="font-headline font-bold text-[var(--color-primary)]">Updating an existing case</p>
+            <p className="text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">
+              Symptoms and media below are added to this case and merged with follow-ups and prior reports.{" "}
+              <Link href={`/case/${caseState.caseId}`} className="font-semibold text-[var(--color-primary)] underline">
+                Case file
+              </Link>
+              {" · "}
+              <Link href={`/analysis-result?case=${caseState.caseId}`} className="font-semibold text-[var(--color-primary)] underline">
+                Full report history
+              </Link>
+            </p>
+          </div>
+        )}
         <section className="space-y-6">
           <header className="space-y-1">
             <span className="font-label text-xs uppercase tracking-[0.2em] text-[var(--color-outline)] font-bold">
@@ -292,6 +442,7 @@ function NewCaseForm() {
               Symptoms (one per line or comma-separated)
             </span>
             <textarea
+              id="symptoms-input"
               value={symptomText}
               onChange={(e) => setSymptomText(e.target.value)}
               rows={4}
@@ -316,51 +467,102 @@ function NewCaseForm() {
             className="hidden"
             onChange={onPickVideos}
           />
+          <input
+            ref={imageCaptureRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onPickImages}
+          />
+          <input
+            ref={videoCaptureRef}
+            type="file"
+            accept="video/*"
+            capture="environment"
+            className="hidden"
+            onChange={onPickVideos}
+          />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-outline)]">From library</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               type="button"
               onClick={() => videoInputRef.current?.click()}
-              className="flex items-center gap-6 p-8 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-transparent focus:border-[var(--color-primary)] cursor-pointer w-full"
+              className="flex items-center gap-6 p-6 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-transparent focus:border-[var(--color-primary)] cursor-pointer w-full"
             >
-              <div className="w-16 h-16 flex-shrink-0 bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-3xl">videocam</span>
+              <div className="w-14 h-14 flex-shrink-0 bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">video_library</span>
               </div>
               <div>
-                <span className="block font-headline text-xl font-bold">Add Video</span>
-                <span className="font-body text-sm text-[var(--color-outline)]">From your device</span>
+                <span className="block font-headline text-lg font-bold">Add video files</span>
+                <span className="font-body text-sm text-[var(--color-outline)]">Gallery / files</span>
               </div>
             </button>
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-6 p-8 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-transparent focus:border-[var(--color-primary)] cursor-pointer w-full"
+              className="flex items-center gap-6 p-6 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-transparent focus:border-[var(--color-primary)] cursor-pointer w-full"
             >
-              <div className="w-16 h-16 flex-shrink-0 bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-3xl">photo_camera</span>
+              <div className="w-14 h-14 flex-shrink-0 bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">add_photo_alternate</span>
               </div>
               <div>
-                <span className="block font-headline text-xl font-bold">Upload Image</span>
-                <span className="font-body text-sm text-[var(--color-outline)]">Photos for AI review</span>
+                <span className="block font-headline text-lg font-bold">Upload images</span>
+                <span className="font-body text-sm text-[var(--color-outline)]">Multiple photos</span>
+              </div>
+            </button>
+          </div>
+
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-outline)] pt-2">Camera (mobile)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => imageCaptureRef.current?.click()}
+              className="flex items-center gap-6 p-6 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-[var(--color-primary)]/25 cursor-pointer w-full"
+            >
+              <div className="w-14 h-14 flex-shrink-0 bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">photo_camera</span>
+              </div>
+              <div>
+                <span className="block font-headline text-lg font-bold">Camera photo</span>
+                <span className="font-body text-sm text-[var(--color-outline)]">Opens device camera when supported</span>
               </div>
             </button>
             <button
               type="button"
-              className="md:col-span-2 flex items-center justify-center gap-6 p-10 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white rounded-xl active:scale-[0.98] duration-150 shadow-xl shadow-[var(--color-primary)]/20 group overflow-hidden relative cursor-pointer w-full opacity-90"
-              disabled
+              onClick={() => videoCaptureRef.current?.click()}
+              className="flex items-center gap-6 p-6 bg-[var(--color-surface-container-lowest)] rounded-xl hover:bg-[var(--color-surface-container-low)] transition-colors text-left active:scale-[0.98] duration-150 border-2 border-[var(--color-primary)]/25 cursor-pointer w-full"
             >
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-              <div className="relative z-10 w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-5xl filled-icon">mic</span>
+              <div className="w-14 h-14 flex-shrink-0 bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">videocam</span>
               </div>
-              <div className="relative z-10 text-left">
-                <span className="block font-headline text-2xl font-extrabold tracking-tight">
-                  Speak Symptoms
-                </span>
-                <span className="font-body text-sm opacity-80">Coming soon — use text below for now</span>
+              <div>
+                <span className="block font-headline text-lg font-bold">Camera video</span>
+                <span className="font-body text-sm text-[var(--color-outline)]">Short clip for AI</span>
               </div>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => toggleSpeech()}
+            className={`w-full flex items-center justify-center gap-4 p-8 rounded-xl active:scale-[0.98] duration-150 shadow-xl border-2 transition-colors ${
+              speechListening
+                ? "bg-[var(--color-error-container)] border-[var(--color-error)] text-[var(--color-on-error-container)]"
+                : "bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white border-transparent"
+            }`}
+          >
+            <span className="material-symbols-outlined text-4xl filled-icon">{speechListening ? "stop_circle" : "mic"}</span>
+            <div className="text-left">
+              <span className="block font-headline text-xl font-extrabold tracking-tight">
+                {speechListening ? "Stop dictation" : "Speak symptoms"}
+              </span>
+              <span className="font-body text-sm opacity-90">
+                {speechListening ? "Tap to stop" : "Uses browser speech (Chrome / Edge). Text is added above."}
+              </span>
+            </div>
+          </button>
 
           {mediaFiles.length > 0 && (
             <ul className="text-sm text-[var(--color-on-surface-variant)] space-y-1">
@@ -389,7 +591,7 @@ function NewCaseForm() {
           <div className="flex items-center gap-4 p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer active:scale-[0.99]">
             <span className="material-symbols-outlined text-[var(--color-primary)]">auto_awesome</span>
             <p className="font-body text-sm text-[var(--color-on-surface-variant)] font-medium">
-              AI analysis uses your symptoms and any images you upload (OpenAI when configured).
+              AI analysis uses your symptoms and any images you upload when configured.
             </p>
           </div>
         </Link>
@@ -402,7 +604,9 @@ function NewCaseForm() {
           disabled={!caseState.animalType || isAnalyzing}
           className={`flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150 cursor-pointer ${!caseState.animalType || isAnalyzing ? "opacity-50 cursor-not-allowed" : ""}`}
         >
-          <span>{isAnalyzing ? "Analyzing..." : "Analyze Case"}</span>
+          <span>
+            {isAnalyzing ? "Analyzing..." : caseState.caseId && UUID_RE.test(caseState.caseId) ? "Merge & analyze case" : "Analyze Case"}
+          </span>
           <span className="material-symbols-outlined">
             {isAnalyzing ? "hourglass_empty" : "arrow_forward"}
           </span>

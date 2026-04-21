@@ -7,6 +7,9 @@ import { AppLogo } from "@/components/AppLogo";
 
 export default function HealthStatus() {
   const { caseState } = useCase();
+  const analysisHref = caseState.caseId ? `/analysis-result?case=${caseState.caseId}` : "/analysis-result";
+  const treatmentHref = caseState.caseId ? `/treatment-options?case=${caseState.caseId}` : "/treatment-options";
+  const guidedHref = caseState.caseId ? `/guided-inspection?case=${caseState.caseId}` : "/guided-inspection";
 
   // Helper to determine UI based on health status
   const getStatusConfig = () => {
@@ -77,7 +80,7 @@ export default function HealthStatus() {
 
       <main className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
         {/* Status Badge Hero Section */}
-        <Link href="/analysis-result" className="relative overflow-hidden rounded-xl bg-[var(--color-surface-container-lowest)] p-8 text-center space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-low)] transition-colors active:scale-[0.99]">
+        <Link href={analysisHref} className="relative overflow-hidden rounded-xl bg-[var(--color-surface-container-lowest)] p-8 text-center space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-low)] transition-colors active:scale-[0.99]">
           <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full font-headline font-bold text-lg ${config.color}`}>
             <span className="material-symbols-outlined filled-icon">{config.icon}</span>
             {config.label}
@@ -160,18 +163,24 @@ export default function HealthStatus() {
                 View case file
               </Link>
               <Link
-                href="/analysis-result"
+                href={analysisHref}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--color-primary)] text-[var(--color-primary)] font-bold py-3 px-4 hover:bg-[var(--color-primary)]/5"
               >
                 <span className="material-symbols-outlined text-xl">analytics</span>
                 Full analysis &amp; differentials
               </Link>
               <Link
-                href="/treatment-options"
+                href={treatmentHref}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)] font-bold py-3 px-4 hover:opacity-95"
               >
                 <span className="material-symbols-outlined text-xl">vaccines</span>
                 Treatment options (from database)
+              </Link>
+              <Link
+                href={`/follow-up?case=${caseState.caseId}`}
+                className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-[var(--color-on-surface-variant)] py-2 underline underline-offset-2"
+              >
+                Add follow-up notes
               </Link>
               <Link
                 href={`/records?case=${caseState.caseId}`}
@@ -190,7 +199,7 @@ export default function HealthStatus() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* What I See */}
           <Link
-            href="/analysis-result"
+            href={analysisHref}
             className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-high)] transition-colors active:scale-[0.99]"
           >
             <div className="flex items-center gap-3">
@@ -231,45 +240,51 @@ export default function HealthStatus() {
 
         {/* Monitoring Checklist */}
         <section className="bg-[var(--color-surface-container-lowest)] rounded-xl p-8 space-y-6">
-          <Link href="/guided-inspection" className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2 cursor-pointer hover:text-[var(--color-primary)] w-fit">
+          <Link href={guidedHref} className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2 cursor-pointer hover:text-[var(--color-primary)] w-fit">
             Monitoring Checklist
           </Link>
           <div className="space-y-4">
-            {/* Checklist Item 1 */}
-            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
+            <Link
+              href={guidedHref}
+              className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
+            >
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">restaurant</span>
-                <span className="font-bold text-[var(--color-on-surface)]">Eating Habits</span>
+                <span className="font-bold text-[var(--color-on-surface)]">Eating habits</span>
               </div>
-              <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </button>
-            {/* Checklist Item 2 */}
-            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
+              <span className="material-symbols-outlined text-[var(--color-outline)] text-sm">chevron_right</span>
+            </Link>
+            <Link
+              href={guidedHref}
+              className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
+            >
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">water_drop</span>
-                <span className="font-bold text-[var(--color-on-surface)]">Drinking Water</span>
+                <span className="font-bold text-[var(--color-on-surface)]">Drinking water</span>
               </div>
-              <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </button>
-            {/* Checklist Item 3 */}
-            <button type="button" className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all">
+              <span className="material-symbols-outlined text-[var(--color-outline)] text-sm">chevron_right</span>
+            </Link>
+            <Link
+              href={guidedHref}
+              className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
+            >
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[var(--color-primary)] filled-icon">directions_run</span>
-                <span className="font-bold text-[var(--color-on-surface)]">Active Movement</span>
+                <span className="font-bold text-[var(--color-on-surface)]">Log movement / behavior</span>
               </div>
-              <span className="material-symbols-outlined text-[var(--color-primary)] font-bold">check</span>
-            </button>
+              <span className="material-symbols-outlined text-[var(--color-outline)] text-sm">chevron_right</span>
+            </Link>
           </div>
         </section>
 
         {/* Action Button */}
         <div className="pt-4 pb-10">
-          <Link href="/guided-inspection" className="w-full h-14 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] text-[var(--color-on-primary)] font-headline font-bold text-lg rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-transform flex items-center justify-center gap-2">
+          <Link href={guidedHref} className="w-full h-14 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] text-[var(--color-on-primary)] font-headline font-bold text-lg rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-transform flex items-center justify-center gap-2">
             <span className="material-symbols-outlined">update</span>
             Check Again Later
           </Link>
           <div className="text-center mt-4">
-            <Link href="/guided-inspection" className="text-[var(--color-on-surface-variant)] text-sm underline">
+            <Link href={guidedHref} className="text-[var(--color-on-surface-variant)] text-sm underline">
               Or proceed to Guided Inspection
             </Link>
           </div>

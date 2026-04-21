@@ -1,18 +1,97 @@
-import Image from "next/image";
+"use client";
+
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCase } from "@/context/CaseContext";
+import { createClient } from "@/lib/supabase/client";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
 
-export default function GuidedInspection() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function safeFileName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function GuidedInspectionInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { caseState, setCaseId } = useCase();
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const paramCase = searchParams.get("case");
+  const caseIdFromUrl = paramCase && UUID_RE.test(paramCase) ? paramCase : null;
+  const effectiveCaseId = caseIdFromUrl || caseState.caseId;
+
+  useEffect(() => {
+    if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
+      setCaseId(caseIdFromUrl);
+    }
+  }, [caseIdFromUrl, caseState.caseId, setCaseId]);
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length || !effectiveCaseId) return;
+    setUploadBusy(true);
+    setUploadMessage(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push(`/login?next=${encodeURIComponent(`/guided-inspection?case=${effectiveCaseId}`)}`);
+        return;
+      }
+
+      let ok = 0;
+      for (const file of Array.from(files)) {
+        const isVideo = file.type.startsWith("video/");
+        const path = `${user.id}/staging/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+        const { error: upErr } = await supabase.storage.from("case-media").upload(path, file, {
+          upsert: false,
+          contentType: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+        });
+        if (upErr) {
+          setUploadMessage(upErr.message || "Upload failed");
+          continue;
+        }
+        const { error: insErr } = await supabase.from("case_inputs").insert({
+          case_id: effectiveCaseId,
+          type: isVideo ? "video" : "image",
+          file_url: path,
+          transcription: `Guided inspection — eyes (${isVideo ? "video" : "photo"})`,
+        });
+        if (insErr) {
+          setUploadMessage(insErr.message || "Could not attach to case");
+          continue;
+        }
+        ok += 1;
+      }
+      if (ok > 0) {
+        setUploadMessage(`Saved ${ok} file${ok === 1 ? "" : "s"} to your case. You can run analysis from New case or Follow-up.`);
+      }
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const caseHref = effectiveCaseId ? `/case/${effectiveCaseId}` : null;
+
   return (
     <>
-      {/* Header Navigation Shell (TopAppBar) */}
       <header className="flex justify-between items-center px-6 py-4 w-full bg-[var(--color-surface-container-low)] dark:bg-stone-900 sticky top-0 z-40">
         <div className="flex items-center gap-4">
-          <Link href="/health-status" className="p-2 rounded-full hover:bg-[#e2e3df] transition-colors active:scale-95 duration-150">
+          <Link
+            href="/health-status"
+            className="p-2 rounded-full hover:bg-[#e2e3df] transition-colors active:scale-95 duration-150"
+          >
             <span className="material-symbols-outlined text-[#0f5238]">close</span>
           </Link>
-          <AppLogo href="/" size={104} />
+          <AppLogo href="/cases" size={104} />
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -26,102 +105,237 @@ export default function GuidedInspection() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pb-32 pt-6">
-        {/* Progress Indicator */}
-        <Link href="/analysis-result" className="mb-10 px-2 block cursor-pointer active:scale-[0.99]">
-          <div className="flex justify-between items-end mb-3">
+        <div className="mb-10 px-2">
+          <div className="flex justify-between items-end mb-3 gap-2">
             <div>
               <p className="text-[var(--color-on-surface-variant)] font-label text-sm font-bold uppercase tracking-widest">
-                Inspection Progress
+                Guided checklist
               </p>
               <p className="font-headline font-extrabold text-2xl text-[var(--color-primary)] mt-1">
-                Step 2 of 5
+                Visual inspection
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-[var(--color-on-surface-variant)] font-body text-sm font-medium">
-                Herd ID: #8821
-              </p>
+            <div className="text-right text-sm">
+              {effectiveCaseId ? (
+                <p className="text-[var(--color-on-surface-variant)] font-body font-medium max-w-[11rem]">
+                  Media saves to{" "}
+                  {caseHref ? (
+                    <Link href={caseHref} className="font-bold text-[var(--color-primary)] underline underline-offset-2">
+                      current case
+                    </Link>
+                  ) : (
+                    <span className="font-bold text-[var(--color-on-surface)]">current case</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-[var(--color-on-surface-variant)] font-body font-medium max-w-[10rem]">
+                  Open from a <span className="font-bold text-[var(--color-on-surface)]">case</span> to attach here, or use{" "}
+                  <span className="font-bold">New case</span>
+                </p>
+              )}
             </div>
           </div>
           <div className="h-3 w-full bg-[var(--color-surface-container-high)] rounded-full overflow-hidden">
             <div
               className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-500"
-              style={{ width: "40%" }}
-            ></div>
+              style={{ width: "35%" }}
+            />
           </div>
-        </Link>
+        </div>
 
-        {/* Main Inspection Content Canvas */}
         <section className="space-y-8">
-          {/* Step Card */}
-          <button type="button" className="w-full bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.08)] relative overflow-hidden text-left cursor-pointer hover:bg-[var(--color-surface-container-low)] active:scale-[0.99]">
-            {/* Tonal layering background element */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-primary-fixed)]/20 rounded-bl-[5rem] -mr-8 -mt-8"></div>
+          <div className="w-full bg-[var(--color-surface-container-lowest)] rounded-xl p-8 shadow-[0px_12px_32px_rgba(44,105,78,0.08)] relative overflow-hidden text-left">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-primary-fixed)]/20 rounded-bl-[5rem] -mr-8 -mt-8" />
             <div className="relative z-10">
               <div className="inline-flex items-center gap-2 bg-[var(--color-primary-fixed)] px-4 py-1.5 rounded-full mb-6">
                 <span className="material-symbols-outlined text-[var(--color-on-primary-fixed)] filled-icon">
                   visibility
                 </span>
                 <span className="text-[var(--color-on-primary-fixed)] font-headline font-bold text-sm uppercase tracking-wide">
-                  Inspection Point
+                  Inspection point
                 </span>
               </div>
-              <h2 className="font-manrope text-4xl font-extrabold text-[var(--color-on-surface)] mb-4">
-                The Eyes
+              <h2 className="font-manrope text-3xl font-extrabold text-[var(--color-on-surface)] mb-4">
+                The eyes
               </h2>
               <p className="text-lg text-[var(--color-on-surface-variant)] leading-relaxed max-w-md">
-                Check both eyes closely. Are you seeing any{" "}
+                Check both eyes closely. Look for{" "}
                 <span className="font-bold text-[var(--color-on-surface)]">
                   discharge, cloudiness, or unusual redness
                 </span>{" "}
-                around the socket?
+                around the socket.{" "}
+                {effectiveCaseId ? (
+                  <>
+                    Use <strong className="text-[var(--color-on-surface)]">Take photo</strong> or{" "}
+                    <strong className="text-[var(--color-on-surface)]">Record video</strong> below — files attach to this
+                    case for AI review.
+                  </>
+                ) : (
+                  <>
+                    Record a short clip or photo below, or start a{" "}
+                    <Link href="/new-case" className="text-[var(--color-primary)] font-bold underline underline-offset-2">
+                      New case
+                    </Link>{" "}
+                    for a full workup.
+                  </>
+                )}
               </p>
             </div>
-            {/* Reference Image */}
-            <div className="mt-8 rounded-lg overflow-hidden border-4 border-[var(--color-surface-container-high)] relative h-64">
-              <Image
-                alt="Reference photo of cow's eye"
-                className="object-cover"
-                fill
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqWu0l6wXIjOFVI4VZkhUqPNsN2wSlHD43sTTM1yFwf_ev3EFZDdaZTVRPiF3tNqoyQEcBumYgW5SdTYd5oBP2-UilJlEDUYf1tJ0CrtggfUhu65PjS1N6M0SY5WUYlH3_6-jlyce6njohS_j3m9Kdt-2HsRdpAfUs-QxRcU-0lTmORPdWxhrAnrbtjFhd_A5o6h5dRsn4A_P2IzXKmZ-iuyK7enPKGHZRE72eAhAewjMeaNylH48AFnCI5npL0bCPT2O4fCMO6Kg"
-              />
+            <div className="mt-8 flex h-56 sm:h-64 items-center justify-center rounded-lg border-4 border-[var(--color-surface-container-high)] bg-[var(--color-surface-container-low)]">
+              <div className="flex flex-col items-center gap-3 px-6 text-center text-[var(--color-primary)]">
+                <span className="material-symbols-outlined text-6xl">visibility</span>
+                <span className="font-label text-sm font-bold uppercase tracking-wider text-[var(--color-on-surface-variant)]">
+                  {effectiveCaseId
+                    ? "Upload attaches to your case — steady lighting, avoid glare"
+                    : "Use steady lighting, avoid glare — link a case to save here"}
+                </span>
+              </div>
             </div>
-            {/* Quick Tips Surface Layer */}
+            {uploadMessage && (
+              <p
+                className={`mt-4 text-sm px-2 ${uploadMessage.includes("fail") || uploadMessage.includes("Could not") ? "text-[var(--color-error)]" : "text-[var(--color-on-surface-variant)]"}`}
+              >
+                {uploadMessage}
+              </p>
+            )}
             <div className="mt-6 p-5 bg-[var(--color-surface-container-low)] rounded-lg flex items-start gap-4">
               <span className="material-symbols-outlined text-[var(--color-primary-container)]">info</span>
               <div>
-                <p className="font-bold text-[var(--color-on-surface-variant)] text-sm uppercase">Expert Tip</p>
+                <p className="font-bold text-[var(--color-on-surface-variant)] text-sm uppercase">Tip</p>
                 <p className="text-[var(--color-on-surface-variant)] text-sm mt-1">
-                  Healthy eyes should be bright, clear, and alert. Avoid recording in direct midday glare if possible.
+                  Healthy eyes are bright and clear. Avoid harsh glare when filming; steady the phone for clearer AI
+                  review.
                 </p>
               </div>
             </div>
-          </button>
-
-          {/* Action Area: The Pulse */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link href="/analysis-result" className="flex items-center justify-center gap-3 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white py-6 px-8 rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-all group cursor-pointer">
-              <span className="material-symbols-outlined text-3xl group-active:scale-110 transition-transform">
-                photo_camera
-              </span>
-              <span className="font-headline font-bold text-lg">Take Photo</span>
-            </Link>
-            <button type="button" className="flex items-center justify-center gap-3 bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface-variant)] py-6 px-8 rounded-full active:scale-95 transition-all group cursor-pointer w-full md:w-auto">
-              <span className="material-symbols-outlined text-3xl">videocam</span>
-              <span className="font-headline font-bold text-lg">Record Video</span>
-            </button>
           </div>
 
-          {/* Skip/Manual Note Link */}
-          <div className="text-center pt-4">
-            <button type="button" className="text-[var(--color-on-surface-variant)] font-bold text-sm uppercase tracking-widest hover:text-[var(--color-primary)] transition-colors cursor-pointer">
-              Add Text Note Instead
-            </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              void uploadFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              void uploadFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {effectiveCaseId ? (
+              <>
+                <button
+                  type="button"
+                  disabled={uploadBusy}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="flex items-center justify-center gap-3 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white py-6 px-8 rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-all group cursor-pointer text-center disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-3xl group-active:scale-110 transition-transform">
+                    photo_camera
+                  </span>
+                  <span className="font-headline font-bold text-lg">{uploadBusy ? "Uploading…" : "Take photo"}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={uploadBusy}
+                  onClick={() => videoInputRef.current?.click()}
+                  className="flex items-center justify-center gap-3 bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface-variant)] py-6 px-8 rounded-full active:scale-95 transition-all group cursor-pointer text-center border-2 border-transparent hover:border-[var(--color-primary)]/30 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-3xl">videocam</span>
+                  <span className="font-headline font-bold text-lg">Record video</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/new-case?camera=photo"
+                  className="flex items-center justify-center gap-3 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white py-6 px-8 rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-all group cursor-pointer text-center"
+                >
+                  <span className="material-symbols-outlined text-3xl group-active:scale-110 transition-transform">
+                    photo_camera
+                  </span>
+                  <span className="font-headline font-bold text-lg">Take photo</span>
+                </Link>
+                <Link
+                  href="/new-case?camera=video"
+                  className="flex items-center justify-center gap-3 bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface-variant)] py-6 px-8 rounded-full active:scale-95 transition-all group cursor-pointer text-center border-2 border-transparent hover:border-[var(--color-primary)]/30"
+                >
+                  <span className="material-symbols-outlined text-3xl">videocam</span>
+                  <span className="font-headline font-bold text-lg">Record video</span>
+                </Link>
+              </>
+            )}
+          </div>
+
+          {!effectiveCaseId && (
+            <p className="text-center text-sm text-[var(--color-on-surface-variant)] px-2">
+              <Link href="/cases" className="font-bold text-[var(--color-primary)] underline">
+                Open a case
+              </Link>{" "}
+              and use &quot;Guided inspection&quot; from there, or add{" "}
+              <span className="font-mono text-xs">?case=…</span> to this page&apos;s URL to attach media to that case.
+            </p>
+          )}
+
+          <div className="text-center pt-2">
+            <Link
+              href={effectiveCaseId ? `/new-case?case=${effectiveCaseId}#symptoms-input` : "/new-case#symptoms-input"}
+              className="text-[var(--color-on-surface-variant)] font-bold text-sm uppercase tracking-widest hover:text-[var(--color-primary)] transition-colors inline-flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">edit_note</span>
+              Add text symptoms instead
+            </Link>
+          </div>
+
+          <div className="rounded-xl border border-[var(--color-outline-variant)]/30 bg-[var(--color-surface-container-low)] p-4 text-sm text-[var(--color-on-surface-variant)]">
+            <p>
+              After photos or video, select species and tap <strong>Analyze case</strong> on New case. Results appear on{" "}
+              <Link href="/health-status" className="text-[var(--color-primary)] font-semibold underline">
+                Health status
+              </Link>{" "}
+              and under{" "}
+              <Link href="/cases" className="text-[var(--color-primary)] font-semibold underline">
+                Cases
+              </Link>
+              {effectiveCaseId && (
+                <>
+                  . Media on this checklist is stored under{" "}
+                  <Link href={caseHref!} className="text-[var(--color-primary)] font-semibold underline">
+                    this case file
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
           </div>
         </section>
       </main>
 
       <BottomNavBar />
     </>
+  );
+}
+
+export default function GuidedInspection() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen pt-28 text-center text-[var(--color-on-surface-variant)]">Loading…</div>
+      }
+    >
+      <GuidedInspectionInner />
+    </Suspense>
   );
 }
