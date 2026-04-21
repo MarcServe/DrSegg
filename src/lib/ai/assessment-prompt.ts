@@ -39,6 +39,16 @@ Produce a single, thorough JSON assessment that helps users understand what migh
 ## Format
 - Output exactly one JSON object, no markdown fences or commentary. Include every key listed in the user message.`;
 
+function formatConditionFlags(k: KnowledgeMatch): string {
+  const parts: string[] = [];
+  if (k.notifiable) parts.push("reportable/notifiable in many jurisdictions");
+  if (k.requires_vet) parts.push("veterinary involvement typically appropriate");
+  if (k.severity_hint) parts.push(`coarse severity hint: ${k.severity_hint}`);
+  if (k.category) parts.push(`category: ${k.category}`);
+  if (parts.length === 0) return "";
+  return `\n   Metadata: ${parts.join("; ")}`;
+}
+
 export function formatKnowledgeBaseSection(matches: KnowledgeMatch[]): string {
   if (matches.length === 0) {
     return "Knowledge base candidates: none retrieved for this query — rely on species-appropriate general triage.";
@@ -48,9 +58,10 @@ export function formatKnowledgeBaseSection(matches: KnowledgeMatch[]): string {
       k.chunk_excerpt && k.chunk_excerpt.trim().length > 0
         ? `\n   Excerpt: ${k.chunk_excerpt.trim().slice(0, 500)}`
         : "";
-    return `${i + 1}. ${k.condition_name} [code: ${k.condition_code}] — match score ${k.score.toFixed(3)}${excerpt}`;
+    const flags = formatConditionFlags(k);
+    return `${i + 1}. ${k.condition_name} [code: ${k.condition_code}] — match score ${k.score.toFixed(3)}${flags}${excerpt}`;
   });
-  return `Knowledge base candidates (prioritize these for differentials and wording unless clearly inconsistent):\n${lines.join("\n")}`;
+  return `Knowledge base candidates (prioritize these for differentials and wording unless clearly inconsistent). When metadata notes reportability/severity, reflect appropriate urgency and regulatory caution without naming drugs or doses:\n${lines.join("\n")}`;
 }
 
 export function buildAssessmentUserMessage(

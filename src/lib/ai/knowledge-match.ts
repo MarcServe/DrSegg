@@ -8,6 +8,10 @@ type ConditionRow = {
   condition_name: string;
   species: string[] | null;
   common_symptoms: string[] | null;
+  requires_vet?: boolean | null;
+  notifiable?: boolean | null;
+  severity_hint?: string | null;
+  category?: string | null;
 };
 
 type ChunkRow = {
@@ -77,6 +81,10 @@ export async function matchConditions(
     condition_name: c.condition_name,
     score: keywordScore(c, chunkRows, symptoms),
     chunk_excerpt: chunkRows.find((ch) => ch.condition_id === c.id)?.chunk_text?.slice(0, 200) ?? null,
+    requires_vet: c.requires_vet ?? null,
+    notifiable: c.notifiable ?? null,
+    severity_hint: c.severity_hint ?? null,
+    category: c.category ?? null,
   }));
 
   const queryEmbedding = await embedText(symptoms.join(" ") || animal);

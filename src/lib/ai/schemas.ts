@@ -30,6 +30,11 @@ export type KnowledgeMatch = {
   condition_name: string;
   score: number;
   chunk_excerpt?: string | null;
+  /** From knowledge_conditions — guides triage and regulatory tone */
+  requires_vet?: boolean | null;
+  notifiable?: boolean | null;
+  severity_hint?: string | null;
+  category?: string | null;
 };
 
 /** Some models return differential confidence as 0–100 instead of 0–1. */
