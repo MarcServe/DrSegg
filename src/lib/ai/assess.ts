@@ -5,6 +5,7 @@ import { applySafetyRules, confidenceBand, detectDeterministicRedFlags } from ".
 import { matchConditions } from "./knowledge-match";
 import { ruleBasedAssessment } from "./rules";
 import { fetchTreatmentsForCondition, type TreatmentRow } from "./treatments";
+import { pickConditionCodeForTreatment } from "./treatment-condition";
 import type { KnowledgeMatch, LlmAssessmentJson } from "./schemas";
 import { normalizeLlmAssessment } from "./schemas";
 
@@ -38,19 +39,16 @@ async function fetchImageBase64(url: string): Promise<{ base64: string; mediaTyp
   }
 }
 
+/** Same rules as `/api/treatment` — best KB alignment, heat stress not over first LLM row. */
 function pickTopConditionCode(
   knowledge: KnowledgeMatch[],
   assessment: LlmAssessmentJson
 ): string | null {
-  if (knowledge[0]?.score >= 0.12) return knowledge[0].condition_code;
-  const d = assessment.differential_diagnoses?.[0];
-  if (d?.condition) {
-    const match = knowledge.find(
-      (k) => k.condition_name.toLowerCase() === d.condition.toLowerCase()
-    );
-    if (match) return match.condition_code;
-  }
-  return knowledge[0]?.condition_code ?? null;
+  return pickConditionCodeForTreatment(
+    knowledge,
+    assessment.differential_diagnoses?.[0]?.condition ?? null,
+    assessment.differential_diagnoses ?? null
+  );
 }
 
 export async function runCaseAssessment(

@@ -47,22 +47,20 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       const km = assess?.knowledge_matches as KnowledgeMatchLite[] | null;
-      const diffTop = Array.isArray(assess?.differential_diagnoses)
-        ? (assess.differential_diagnoses as { condition?: string }[])[0]?.condition
-        : null;
-      conditionCode = pickConditionCodeForTreatment(
-        km,
-        assess?.likely_condition ?? null,
-        diffTop ?? null
-      );
+      const differentials = Array.isArray(assess?.differential_diagnoses)
+        ? (assess.differential_diagnoses as { condition?: string }[])
+        : [];
+      conditionCode = pickConditionCodeForTreatment(km, assess?.likely_condition ?? null, differentials);
 
-      if (!conditionCode && assess?.likely_condition) {
-        const { data: condRow } = await supabase
-          .from("knowledge_conditions")
-          .select("condition_code")
-          .ilike("condition_name", `%${assess.likely_condition}%`)
-          .maybeSingle();
-        conditionCode = condRow?.condition_code ?? null;
+      /** likely_condition is often a paragraph; match longest condition_name contained in that text (not ilike the other way). */
+      if (!conditionCode && assess?.likely_condition?.trim()) {
+        const ll = assess.likely_condition.toLowerCase();
+        const { data: nameRows } = await supabase.from("knowledge_conditions").select("condition_code, condition_name");
+        const candidates = (nameRows ?? []).filter(
+          (r) => typeof r.condition_name === "string" && r.condition_name.length >= 4 && ll.includes(r.condition_name.toLowerCase())
+        );
+        candidates.sort((a, b) => (b.condition_name?.length ?? 0) - (a.condition_name?.length ?? 0));
+        conditionCode = candidates[0]?.condition_code ?? null;
       }
       if (!condition && assess?.likely_condition) {
         condition = assess.likely_condition;

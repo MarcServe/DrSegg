@@ -49,6 +49,28 @@ function keywordScore(condition: ConditionRow, chunks: ChunkRow[], symptoms: str
   return hits / Math.max(tokens.length, 1);
 }
 
+const HEAT_STRESS_CODE = "heat_stress";
+
+/** Without heat-related cues, environmental heat stress often false-wins retrieval (broad species + vague wording). */
+function symptomTextSuggestsHeatStress(symptoms: string[]): boolean {
+  const s = symptoms.join(" ").toLowerCase();
+  return /\b(heat|hot|hypertherm|pant|panting|shade|ventilation|ventilate|cooling|cool water|summer|sun|temperature|humid|drought|midday|afternoon|overheat|dehydrat|heat.?stress|thirst)\b/i.test(
+    s
+  );
+}
+
+function applyHeatStressDemotion(
+  matches: KnowledgeMatch[],
+  symptoms: string[]
+): KnowledgeMatch[] {
+  if (symptomTextSuggestsHeatStress(symptoms)) return matches;
+  return matches.map((m) => {
+    if (m.condition_code !== HEAT_STRESS_CODE) return m;
+    const s = Math.max(0, (m.score ?? 0) * 0.2 - 0.05);
+    return { ...m, score: s };
+  });
+}
+
 /**
  * Hybrid retrieval: keyword scoring + optional pgvector similarity when embeddings exist.
  */
@@ -61,7 +83,9 @@ export async function matchConditions(
   try {
   const { data: conditions, error: cErr } = await supabase
     .from("knowledge_conditions")
-    .select("id, condition_code, condition_name, species, common_symptoms");
+    .select(
+      "id, condition_code, condition_name, species, common_symptoms, requires_vet, notifiable, severity_hint, category"
+    );
 
   if (cErr || !conditions?.length) {
     return [];
@@ -110,6 +134,7 @@ export async function matchConditions(
     }
   }
 
+  scored = applyHeatStressDemotion(scored, symptoms);
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, 8);
   } catch {
