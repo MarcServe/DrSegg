@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
     const data = await request.json();
     const { caseId, notes, status } = data;
-    const progressStatus = status || "improving";
+    const progressStatus = status && String(status).trim() ? String(status).trim() : "unchanged";
 
     if (!caseId) {
       return NextResponse.json({ error: "caseId is required" }, { status: 400 });
@@ -83,6 +83,13 @@ export async function POST(request: Request) {
     });
 
     if (error) throw error;
+
+    const { error: actErr } = await supabase
+      .from("cases")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", caseId)
+      .eq("user_id", user.id);
+    if (actErr) console.warn("followup last_activity_at:", actErr);
 
     return NextResponse.json({
       success: true,

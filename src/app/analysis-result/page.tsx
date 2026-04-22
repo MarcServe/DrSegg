@@ -19,6 +19,7 @@ function normalizeTreatmentRow(t: TreatmentRow): TreatmentRow {
     drug_name: t.drug_name,
     generic_name: t.generic_name ?? null,
     dosage_text: t.dosage_text ?? null,
+    course_duration_text: t.course_duration_text ?? null,
     supportive_care: t.supportive_care ?? null,
     prescription_required: t.prescription_required ?? null,
     isolation_required: t.isolation_required ?? null,

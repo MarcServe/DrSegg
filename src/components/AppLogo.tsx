@@ -17,6 +17,9 @@ export function AppLogo({
   size = 104,
   emphasis = false,
 }: AppLogoProps) {
+  /** Softens any residual flat white in the bitmap against light/dark headers. */
+  const backgroundBlend = "mix-blend-multiply dark:mix-blend-screen";
+
   const img = (
     <Image
       src="/dr-morgees-logo.png"
@@ -24,11 +27,12 @@ export function AppLogo({
       width={size}
       height={size}
       placeholder="empty"
-      className={`object-contain border-0 ${
+      className={`object-contain border-0 !bg-transparent [background:none] ${backgroundBlend} ${
         emphasis
           ? "drop-shadow-[0_2px_12px_rgba(15,82,56,0.12)] dark:drop-shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
           : ""
       } ${className}`}
+      style={{ color: "transparent" }}
       priority
     />
   );

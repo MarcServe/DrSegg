@@ -4,6 +4,8 @@ export type TreatmentRow = {
   drug_name: string;
   generic_name: string | null;
   dosage_text: string | null;
+  /** Typical course length if applicable (from DB, informational) */
+  course_duration_text: string | null;
   supportive_care: string | null;
   prescription_required: boolean | null;
   isolation_required: boolean | null;
@@ -16,6 +18,7 @@ export type TreatmentRow = {
 
 type PlanRow = {
   dosage_text: string | null;
+  course_duration_text?: string | null;
   supportive_care: string | null;
   prescription_required: boolean | null;
   isolation_required: boolean | null;
@@ -76,6 +79,7 @@ export async function fetchTreatmentsForCondition(
 
   const selectWithImage = `
       dosage_text,
+      course_duration_text,
       supportive_care,
       prescription_required,
       isolation_required,
@@ -92,6 +96,7 @@ export async function fetchTreatmentsForCondition(
 
   const selectNoImage = `
       dosage_text,
+      course_duration_text,
       supportive_care,
       prescription_required,
       isolation_required,
@@ -105,15 +110,59 @@ export async function fetchTreatmentsForCondition(
       )
     `;
 
-  let { data: plans, error: pErr } = await supabase
-    .from("condition_treatments")
-    .select(selectWithImage)
-    .eq("condition_id", cond.id);
+  const selectWithImageNoDuration = `
+      dosage_text,
+      supportive_care,
+      prescription_required,
+      isolation_required,
+      source_reference,
+      region,
+      species,
+      treatment_level,
+      drug_database (
+        active_ingredient,
+        brand_name,
+        image_url
+      )
+    `;
 
-  if (pErr && (pErr.message ?? "").toLowerCase().includes("image_url")) {
-    const r2 = await supabase.from("condition_treatments").select(selectNoImage).eq("condition_id", cond.id);
-    plans = r2.data as typeof plans;
+  const selectNoImageNoDuration = `
+      dosage_text,
+      supportive_care,
+      prescription_required,
+      isolation_required,
+      source_reference,
+      region,
+      species,
+      treatment_level,
+      drug_database (
+        active_ingredient,
+        brand_name
+      )
+    `;
+
+  let plans: unknown[] | null = null;
+  let pErr: { message?: string } | null = null;
+  ({
+    data: plans,
+    error: pErr,
+  } = await supabase.from("condition_treatments").select(selectWithImage).eq("condition_id", cond.id));
+  plans = (plans as unknown[] | null) ?? null;
+
+  if (pErr && (pErr.message ?? "").toLowerCase().includes("course_duration_text")) {
+    const r2 = await supabase.from("condition_treatments").select(selectWithImageNoDuration).eq("condition_id", cond.id);
+    plans = (r2.data as unknown[] | null) ?? null;
     pErr = r2.error;
+  }
+  if (pErr && (pErr.message ?? "").toLowerCase().includes("image_url")) {
+    const r3 = await supabase.from("condition_treatments").select(selectNoImage).eq("condition_id", cond.id);
+    plans = (r3.data as unknown[] | null) ?? null;
+    pErr = r3.error;
+  }
+  if (pErr && (pErr.message ?? "").toLowerCase().includes("course_duration_text")) {
+    const r4 = await supabase.from("condition_treatments").select(selectNoImageNoDuration).eq("condition_id", cond.id);
+    plans = (r4.data as unknown[] | null) ?? null;
+    pErr = r4.error;
   }
 
   if (pErr || !plans?.length) return [];
@@ -135,6 +184,7 @@ export async function fetchTreatmentsForCondition(
         drug_name: d.brand_name,
         generic_name: d.active_ingredient ?? null,
         dosage_text: p.dosage_text,
+        course_duration_text: p.course_duration_text?.trim() || null,
         supportive_care: p.supportive_care,
         prescription_required: p.prescription_required,
         isolation_required: p.isolation_required,
@@ -166,6 +216,7 @@ export async function fetchTreatmentsForCondition(
         drug_name: title,
         generic_name: null,
         dosage_text: p.dosage_text,
+        course_duration_text: p.course_duration_text?.trim() || null,
         supportive_care: p.supportive_care,
         prescription_required: p.prescription_required,
         isolation_required: p.isolation_required,

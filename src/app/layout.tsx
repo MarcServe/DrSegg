@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { CaseProvider } from "@/context/CaseContext";
+import { PwaInstallButton } from "@/components/PwaInstallButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -16,10 +17,23 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Dr Segg",
   description: "Dr Morgees — farm & pet health assistant",
+  applicationName: "Dr Morgees",
   icons: {
     icon: "/dr-morgees-logo.png",
     apple: "/dr-morgees-logo.png",
   },
+  appleWebApp: {
+    capable: true,
+    title: "Dr Morgees",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0f5238" },
+    { media: "(prefers-color-scheme: dark)", color: "#145c3a" },
+  ],
 };
 
 export default function RootLayout({
@@ -40,6 +54,7 @@ export default function RootLayout({
       >
         <CaseProvider>
           {children}
+          <PwaInstallButton />
         </CaseProvider>
       </body>
     </html>

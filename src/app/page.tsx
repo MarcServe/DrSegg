@@ -4,6 +4,8 @@ import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import { AppLogo } from "@/components/AppLogo";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 function formatRelative(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -60,12 +62,23 @@ export default async function Home() {
   let urgentCaseCount = 0;
 
   if (user) {
-    const { data } = await supabase
+    const { data, error: recentErr } = await supabase
       .from("cases")
-      .select("id, animal_type, health_status")
+      .select("id, animal_type, health_status, last_activity_at, created_at, monitoring_active")
+      .or("monitoring_active.is.null,monitoring_active.eq.true")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
-      .limit(2);
-    recentCases = data ?? [];
+      .limit(5);
+    if (recentErr) {
+      const r2 = await supabase
+        .from("cases")
+        .select("id, animal_type, health_status")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      recentCases = r2.data ?? [];
+    } else {
+      recentCases = data ?? [];
+    }
 
     const { count: dc } = await supabase
       .from("farm_documents")
@@ -246,9 +259,9 @@ export default async function Home() {
                 {user && caseCount > 0 ? `View all (${caseCount})` : "View all"}
               </Link>
             </div>
-            {user && caseCount > 2 ? (
+            {user && caseCount > 5 ? (
               <p className="text-xs text-[var(--color-outline)] -mt-2">
-                Showing your 2 most recent cases — open the full list for all.
+                Showing up to 5 active cases (by recent activity) — open the full list for all.
               </p>
             ) : null}
             <div className="space-y-4">

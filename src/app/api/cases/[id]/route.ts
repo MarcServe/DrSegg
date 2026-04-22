@@ -89,20 +89,27 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const displayName = body.display_name;
+    const body = (await request.json()) as { display_name?: unknown; monitoring_active?: unknown };
+    const updates: Record<string, string | boolean | null> = {};
 
-    if (typeof displayName !== "string") {
-      return NextResponse.json({ error: "display_name must be a string" }, { status: 400 });
+    if (typeof body.display_name === "string") {
+      const trimmed = body.display_name.trim().slice(0, 120);
+      updates.display_name = trimmed.length ? trimmed : null;
+    }
+    if (typeof body.monitoring_active === "boolean") {
+      updates.monitoring_active = body.monitoring_active;
     }
 
-    const trimmed = displayName.trim().slice(0, 120);
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "Provide display_name and/or monitoring_active" }, { status: 400 });
+    }
+
     const { data: updated, error } = await supabase
       .from("cases")
-      .update({ display_name: trimmed.length ? trimmed : null })
+      .update(updates)
       .eq("id", id)
       .eq("user_id", user.id)
-      .select("id, display_name")
+      .select("id, display_name, monitoring_active")
       .maybeSingle();
 
     if (error) throw error;
@@ -110,7 +117,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, display_name: updated.display_name });
+    return NextResponse.json({
+      success: true,
+      display_name: updated.display_name,
+      monitoring_active: updated.monitoring_active,
+    });
   } catch (e) {
     console.error("PATCH /api/cases/[id]", e);
     return NextResponse.json({ error: "Failed to update case" }, { status: 500 });

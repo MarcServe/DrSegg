@@ -166,6 +166,7 @@ export async function POST(request: Request) {
     const requiresMoreData = !!a.needs_more_info;
     const caseStatus = mapCaseStatus(a.recommendation_type);
 
+    const nowIso = new Date().toISOString();
     const { data: caseData, error: caseError } = await supabase
       .from("cases")
       .insert({
@@ -175,6 +176,8 @@ export async function POST(request: Request) {
         confidence: confidence.toString(),
         mode: health_status === "healthy" ? "observation" : "diagnosis",
         status: caseStatus,
+        monitoring_active: true,
+        last_activity_at: nowIso,
       })
       .select("id")
       .single();

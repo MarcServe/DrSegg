@@ -28,7 +28,7 @@ function FollowUpContent() {
   const { caseState, setCaseId, setRegion } = useCase();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reassessBusy, setReassessBusy] = useState(false);
-  const [status, setStatus] = useState("improving");
+  const [status, setStatus] = useState<"improving" | "worsening" | "unchanged">("unchanged");
   const [notes, setNotes] = useState("");
   const [bundle, setBundle] = useState<CaseBundle | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -250,7 +250,15 @@ function FollowUpContent() {
                 >
                   <div className="flex justify-between gap-2 text-xs font-bold uppercase text-[var(--color-outline)]">
                     <span>{new Date(f.created_at).toLocaleString()}</span>
-                    <span>{f.status === "worsening" ? "Worsening" : f.status === "improving" ? "Improving" : "—"}</span>
+                    <span>
+                      {f.status === "worsening"
+                        ? "Worsening"
+                        : f.status === "improving"
+                          ? "Improving"
+                          : f.status === "unchanged" || !f.status
+                            ? "Unchanged"
+                            : f.status}
+                    </span>
                   </div>
                   <p className="text-sm text-[var(--color-on-surface)] mt-2 whitespace-pre-wrap">{f.notes || "—"}</p>
                 </li>
@@ -259,31 +267,49 @@ function FollowUpContent() {
           )}
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
-          <button
-            type="button"
-            onClick={() => setStatus("improving")}
-            className={`bg-[var(--color-surface-container-highest)] p-8 rounded-xl flex flex-col items-center gap-4 hover:bg-[var(--color-surface-variant)] transition-colors active:scale-95 group cursor-pointer ${
-              status === "improving" ? "ring-4 ring-[var(--color-primary)]" : ""
-            }`}
-          >
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-[var(--color-primary)] text-3xl">trending_up</span>
-            </div>
-            <span className="text-lg font-bold font-manrope">Improving</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatus("worsening")}
-            className={`bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] p-8 rounded-xl flex flex-col items-center gap-4 hover:opacity-90 transition-opacity active:scale-95 text-white group cursor-pointer ${
-              status === "worsening" ? "ring-4 ring-red-500" : ""
-            }`}
-          >
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-white text-3xl filled-icon">trending_down</span>
-            </div>
-            <span className="text-lg font-bold font-manrope">Worsening</span>
-          </button>
+        <section className="space-y-2">
+          <h3 className="font-headline font-bold text-sm text-[var(--color-on-surface)] px-1">How is the animal now?</h3>
+          <p className="text-xs text-[var(--color-on-surface-variant)] px-1 mb-2">
+            Choose one — default is <span className="font-semibold">Unchanged / stable</span> until you update it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-1">
+            <button
+              type="button"
+              onClick={() => setStatus("improving")}
+              className={`bg-[var(--color-surface-container-highest)] p-6 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-variant)] transition-colors active:scale-95 group cursor-pointer ${
+                status === "improving" ? "ring-4 ring-[var(--color-primary)]" : ""
+              }`}
+            >
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[var(--color-primary)] text-3xl">trending_up</span>
+              </div>
+              <span className="text-base font-bold font-manrope">Improving</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus("unchanged")}
+              className={`bg-[var(--color-surface-container-lowest)] border-2 border-[var(--color-outline-variant)]/40 p-6 rounded-xl flex flex-col items-center gap-3 hover:bg-[var(--color-surface-container-low)] transition-colors active:scale-95 group cursor-pointer ${
+                status === "unchanged" ? "ring-4 ring-[var(--color-secondary)]" : ""
+              }`}
+            >
+              <div className="w-14 h-14 bg-[var(--color-surface-container-highest)] rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[var(--color-on-surface)] text-3xl">trending_flat</span>
+              </div>
+              <span className="text-base font-bold font-manrope text-center leading-tight">Unchanged / stable</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus("worsening")}
+              className={`bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] p-6 rounded-xl flex flex-col items-center gap-3 hover:opacity-90 transition-opacity active:scale-95 text-white group cursor-pointer ${
+                status === "worsening" ? "ring-4 ring-red-500" : ""
+              }`}
+            >
+              <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-white text-3xl filled-icon">trending_down</span>
+              </div>
+              <span className="text-base font-bold font-manrope">Worsening</span>
+            </button>
+          </div>
         </section>
 
         <section className="space-y-2">

@@ -1,25 +1,31 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import type { TreatmentRow } from "@/lib/ai/treatments";
+import { DRUG_IMAGE_PLACEHOLDER, resolveDrugImageUrl } from "@/lib/drug-image";
 
 /** Shared layout: drug image, names, dosage, supportive care, regional / Rx badges */
 export function TreatmentRowDisplay({ t }: { t: TreatmentRow }) {
   const rx = t.prescription_required === true;
   const isolation = t.isolation_required === true;
   const localOk = t.available_in_your_region !== false;
-  const img = t.image_url?.trim();
+  const initialSrc = resolveDrugImageUrl(t.image_url);
+  const [imgSrc, setImgSrc] = useState(initialSrc);
+
+  useEffect(() => {
+    setImgSrc(initialSrc);
+  }, [initialSrc]);
 
   return (
     <div className="flex gap-4">
       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--color-primary-container)]/10 text-[var(--color-primary)]">
-        {img ? (
-          <img
-            src={img}
-            alt={t.drug_name}
-            className="h-full w-full object-contain p-1"
-            loading="lazy"
-          />
-        ) : (
-          <span className="material-symbols-outlined text-3xl">medication</span>
-        )}
+        <img
+          src={imgSrc}
+          alt={t.drug_name}
+          className="h-full w-full object-contain p-1"
+          loading="lazy"
+          onError={() => setImgSrc(DRUG_IMAGE_PLACEHOLDER)}
+        />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -51,9 +57,26 @@ export function TreatmentRowDisplay({ t }: { t: TreatmentRow }) {
           </p>
         ) : null}
         {t.dosage_text ? (
+          <div className="mt-4 rounded-lg bg-[var(--color-surface-container-low)] p-4 space-y-2">
+            <div>
+              <span className="font-label text-xs font-bold uppercase text-[var(--color-outline)]">Dosage &amp; use</span>
+              <p className="mt-1 text-sm font-medium text-[var(--color-on-surface)]">{t.dosage_text}</p>
+            </div>
+            {t.course_duration_text ? (
+              <div className="pt-2 border-t border-[var(--color-outline-variant)]/20">
+                <span className="font-label text-xs font-bold uppercase text-[var(--color-outline)]">
+                  Typical course length
+                </span>
+                <p className="mt-1 text-sm text-[var(--color-on-surface-variant)]">{t.course_duration_text}</p>
+                <p className="mt-1 text-xs text-[var(--color-outline)]">Confirm with a vet for drugs and your situation.</p>
+              </div>
+            ) : null}
+          </div>
+        ) : t.course_duration_text ? (
           <div className="mt-4 rounded-lg bg-[var(--color-surface-container-low)] p-4">
-            <span className="font-label text-xs font-bold uppercase text-[var(--color-outline)]">Dosage</span>
-            <p className="mt-1 text-sm font-medium text-[var(--color-on-surface)]">{t.dosage_text}</p>
+            <span className="font-label text-xs font-bold uppercase text-[var(--color-outline)]">Typical course length</span>
+            <p className="mt-1 text-sm text-[var(--color-on-surface)]">{t.course_duration_text}</p>
+            <p className="mt-1 text-xs text-[var(--color-outline)]">Confirm with a vet for your animal.</p>
           </div>
         ) : null}
         {t.supportive_care ? (

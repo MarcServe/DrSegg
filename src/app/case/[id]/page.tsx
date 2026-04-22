@@ -9,6 +9,8 @@ import {
   CASE_DETAIL_PAGE_SELECT_WITH_NAME,
   isMissingDisplayNameColumn,
 } from "@/lib/case-detail-select";
+import { buildCaseTimeline, caseTimelineBadgeClass, formatCaseTimelineWhen } from "@/lib/case-timeline";
+import { CaseMonitoringBar } from "@/components/CaseMonitoringBar";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -71,42 +73,18 @@ export default async function CaseDetail({ params }: PageProps) {
     row.display_name?.trim() ||
     `${row.animal_type} · ${row.created_at ? new Date(row.created_at).toLocaleDateString() : "case"}`;
 
-  const timeline: { key: string; day: string; desc: string; status: string }[] = sortedFollowups
-    .slice(0, 5)
-    .map((f, idx) => ({
-      key: f.id,
-      day:
-        idx === 0
-          ? "Latest"
-          : new Date(f.created_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            }),
-      desc: f.notes || "Follow-up recorded",
-      status:
-        f.status === "improving"
-          ? "Improving"
-          : f.status === "worsening"
-            ? "Worsening"
-            : "Unchanged",
-    }));
-
-  if (timeline.length === 0) {
-    timeline.push({
-      key: "case-start",
-      day: "Start",
-      desc: `Case opened — ${row.animal_type}`,
-      status: "Unchanged",
-    });
-  }
-
-  const badgeClass = (status: string) => {
-    if (status === "Improving")
-      return "bg-[var(--color-primary-fixed)] text-[var(--color-on-primary-fixed)]";
-    if (status === "Worsening")
-      return "bg-[var(--color-tertiary-fixed)] text-[var(--color-on-tertiary-fixed-variant)]";
-    return "bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)]";
-  };
+  const timelineEvents = buildCaseTimeline({
+    caseId: id,
+    caseOpenedAt: row.created_at,
+    animalType: row.animal_type,
+    followups: sortedFollowups,
+    reports: reportHistory ?? [],
+    documents: (attachedDocs ?? []).map((d) => ({
+      id: d.id,
+      created_at: d.created_at,
+      title: d.title,
+    })),
+  });
 
   const subtitle =
     aiAssessment?.summary?.slice(0, 120) ||
@@ -115,6 +93,8 @@ export default async function CaseDetail({ params }: PageProps) {
     "Case review";
 
   const speciesIconKey = animalTypeToIconKey(row.animal_type);
+  const monitoringFromRow = (row as { monitoring_active?: boolean | null }).monitoring_active;
+  const isActivelyMonitoring = monitoringFromRow !== false;
 
   return (
     <>
@@ -164,6 +144,8 @@ export default async function CaseDetail({ params }: PageProps) {
             </div>
           </div>
         </Link>
+
+        <CaseMonitoringBar caseId={id} initialMonitoringActive={isActivelyMonitoring} />
 
         <section className="space-y-4">
           <div className="flex items-center justify-between px-2 gap-4">
@@ -273,43 +255,85 @@ export default async function CaseDetail({ params }: PageProps) {
           </section>
         )}
 
-        <section className="space-y-6">
-          <Link
-            href={`/follow-up?case=${id}`}
-            className="text-xl font-bold font-manrope px-2 block cursor-pointer hover:text-[var(--color-primary)] w-fit"
-          >
-            Recovery Timeline
-          </Link>
-          <div className="space-y-4">
-            {timeline.map((item, idx) => (
-              <div
-                key={item.key}
-                className="bg-[var(--color-surface-container-low)] p-6 rounded-xl flex items-center justify-between group hover:bg-[var(--color-surface-container-high)] transition-colors"
-              >
-                <div className="flex items-center gap-6">
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${
-                      idx === 0
-                        ? "bg-[var(--color-primary)] text-white"
-                        : "bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)]"
-                    }`}
+        <section className="space-y-4">
+          <div className="px-2">
+            <h2 className="text-xl font-bold font-manrope">Activity timeline</h2>
+            <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">
+              Follow-ups, Dr Morgees reports, and records — newest first. Times show how recently each item was added.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {timelineEvents.length === 0 ? (
+              <p className="text-sm text-[var(--color-on-surface-variant)] px-2">No activity yet for this case.</p>
+            ) : (
+              timelineEvents.map((item, idx) => {
+                const { label: typeLabel, chip: typeChip } = caseTimelineBadgeClass(
+                  item.kind,
+                  item.followupStatus
+                );
+                const timeLabel = formatCaseTimelineWhen(item.at);
+                const isNewest = idx === 0;
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="bg-[var(--color-surface-container-low)] p-4 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-[var(--color-surface-container-high)] transition-colors border border-transparent hover:border-[var(--color-outline-variant)]/20"
                   >
-                    {timeline.length - idx}
-                  </div>
-                  <div>
-                    <p className="font-bold text-lg">{item.day}</p>
-                    <p className="text-[var(--color-on-surface-variant)] text-sm">{item.desc}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span
-                    className={`px-4 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${badgeClass(item.status)}`}
-                  >
-                    {item.status.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            ))}
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          isNewest
+                            ? "bg-[var(--color-primary)] text-white"
+                            : "bg-[var(--color-surface-container-highest)] text-[var(--color-on-surface)]"
+                        }`}
+                      >
+                        {timelineEvents.length - idx}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                          {isNewest ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-primary)]">
+                              Latest
+                            </span>
+                          ) : null}
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${typeChip}`}
+                          >
+                            {typeLabel}
+                          </span>
+                          <span className="text-xs text-[var(--color-outline)] font-medium">
+                            {timeLabel}
+                            <span className="sr-only"> — {new Date(item.at).toLocaleString()}</span>
+                          </span>
+                        </div>
+                        <p className="font-bold text-[var(--color-on-surface)] mt-0.5">{item.title}</p>
+                        <p className="text-[var(--color-on-surface-variant)] text-sm line-clamp-3">{item.detail}</p>
+                        {item.kind === "followup" && item.followupStatus ? (
+                          <span
+                            className={`inline-flex mt-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                              item.followupStatus === "improving"
+                                ? "bg-[var(--color-primary-fixed)]/30 text-[var(--color-on-primary-fixed-variant)]"
+                                : item.followupStatus === "worsening"
+                                  ? "bg-red-200/50 text-red-900 dark:bg-red-950/50 dark:text-red-100"
+                                  : "bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)]"
+                            }`}
+                          >
+                            {item.followupStatus === "improving"
+                              ? "Improving"
+                              : item.followupStatus === "worsening"
+                                ? "Worsening"
+                                : "Unchanged"}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-[var(--color-primary)] shrink-0 self-end sm:self-center">
+                      Open →
+                    </span>
+                  </Link>
+                );
+              })
+            )}
           </div>
         </section>
 

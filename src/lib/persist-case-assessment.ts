@@ -51,6 +51,7 @@ export async function persistCaseAssessmentArtifacts(
         confidence: confidence.toString(),
         mode: health_status === "healthy" ? "observation" : "diagnosis",
         status: caseStatus,
+        last_activity_at: new Date().toISOString(),
       })
       .eq("id", caseId);
     if (upErr) throw upErr;
@@ -188,6 +189,7 @@ export async function persistCaseAssessmentArtifacts(
         drug_name: t.drug_name,
         generic_name: t.generic_name,
         dosage_text: t.dosage_text,
+        course_duration_text: t.course_duration_text ?? null,
         supportive_care: t.supportive_care,
         prescription_required: t.prescription_required,
         isolation_required: t.isolation_required,
