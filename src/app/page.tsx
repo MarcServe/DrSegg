@@ -139,8 +139,8 @@ export default async function Home() {
 
   return (
     <>
-      <header className="bg-[#f9faf6] dark:bg-stone-950 flex justify-between items-center px-6 py-4 w-full fixed top-0 z-50">
-        <div className="flex items-center gap-4">
+      <header className="bg-[#f9faf6] dark:bg-stone-950 flex items-center justify-between px-6 py-4 w-full fixed top-0 z-50">
+        <div className="flex flex-1 min-w-0 items-center justify-start">
           <Link
             href="/cases"
             aria-label="Open cases"
@@ -148,9 +148,11 @@ export default async function Home() {
           >
             menu
           </Link>
+        </div>
+        <div className="flex shrink-0 items-center justify-center">
           <AppLogo href="/" size={56} />
         </div>
-        <div className="flex items-center">
+        <div className="flex flex-1 min-w-0 items-center justify-end">
           <Link
             href={user ? "/profile" : "/login"}
             aria-label="Settings"

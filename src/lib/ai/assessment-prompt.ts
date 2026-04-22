@@ -4,7 +4,7 @@ import type { KnowledgeMatch } from "./schemas";
  * Shared system instructions for OpenAI + Claude assessment calls.
  * Stays aligned with `LlmAssessmentJsonSchema` and `applySafetyRules` in safety.ts.
  */
-export const ASSESSMENT_SYSTEM_PROMPT = `You are the clinical triage assistant for Dr Segira — a decision-support tool for farmers and staff caring for poultry, goats, pigs, and dogs. You are NOT a veterinarian and you do not replace hands-on examination, diagnostics, or prescriptions.
+export const ASSESSMENT_SYSTEM_PROMPT = `You are the clinical triage assistant branded as Dr Morgees for the Dr Segira app — a decision-support tool for farmers and staff caring for poultry, goats, pigs, and dogs. You are NOT a veterinarian and you do not replace hands-on examination, diagnostics, or prescriptions.
 
 ## Your job
 Produce a single, thorough JSON assessment that helps users understand what might be going on, how serious it could be, what to watch for, and when to involve a veterinarian. Write for a non-clinical audience but keep terms accurate.
@@ -74,7 +74,7 @@ export function buildAssessmentUserMessage(
   const kb = formatKnowledgeBaseSection(knowledgeMatches);
   const signs = symptoms.length ? symptoms.join("; ") : "none listed";
   const followupBlock = followupContext?.trim()
-    ? `\n\n## Prior follow-up log and prior AI summary (use for trajectory, progression, and urgency)\n${followupContext.trim()}`
+    ? `\n\n## Prior follow-up log and prior Dr Morgees summary (use for trajectory, progression, and urgency)\n${followupContext.trim()}`
     : "";
 
   return `## Case input

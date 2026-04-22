@@ -1,15 +1,53 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
+import { getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
+import { buildGuidedInspectionPath, getMonitoringChecklistIntro, type MonitoringContext } from "@/lib/monitoring-tips";
 
-export default function HealthStatus() {
-  const { caseState } = useCase();
-  const analysisHref = caseState.caseId ? `/analysis-result?case=${caseState.caseId}` : "/analysis-result";
-  const treatmentHref = caseState.caseId ? `/treatment-options?case=${caseState.caseId}` : "/treatment-options";
-  const guidedHref = caseState.caseId ? `/guided-inspection?case=${caseState.caseId}` : "/guided-inspection";
+function HealthStatusInner() {
+  const searchParams = useSearchParams();
+  const { caseState, setCaseId } = useCase();
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const activeCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
+  const analysisHref = activeCaseId ? `/analysis-result?case=${activeCaseId}` : "/analysis-result";
+  const treatmentHref = activeCaseId ? `/treatment-options?case=${activeCaseId}` : "/treatment-options";
+  const newCaseHref = activeCaseId ? `/new-case?case=${activeCaseId}` : "/new-case";
+
+  useEffect(() => {
+    if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
+      setCaseId(caseIdFromUrl);
+    }
+  }, [caseIdFromUrl, caseState.caseId, setCaseId]);
+
+  const monitoringCtx: MonitoringContext = useMemo(
+    () => ({
+      species: caseState.animalType || "",
+      symptoms: caseState.symptoms,
+      suggestedNextChecks: caseState.suggestedNextChecks,
+      possibleConditions: caseState.possibleConditions,
+      redFlags: caseState.redFlags,
+    }),
+    [
+      caseState.animalType,
+      caseState.symptoms,
+      caseState.suggestedNextChecks,
+      caseState.possibleConditions,
+      caseState.redFlags,
+    ]
+  );
+
+  const checklistIntro = useMemo(() => getMonitoringChecklistIntro(monitoringCtx), [monitoringCtx]);
+
+  const guidedEating = buildGuidedInspectionPath(activeCaseId, "eating");
+  const guidedWater = buildGuidedInspectionPath(activeCaseId, "water");
+  const guidedMovement = buildGuidedInspectionPath(activeCaseId, "movement");
+  const guidedVisual = buildGuidedInspectionPath(activeCaseId, "visual");
+  const guidedDefault = buildGuidedInspectionPath(activeCaseId, null);
 
   // Helper to determine UI based on health status
   const getStatusConfig = () => {
@@ -64,7 +102,7 @@ export default function HealthStatus() {
       {/* TopAppBar */}
       <header className="bg-[#f9faf6] dark:bg-stone-950 flex justify-between items-center px-6 py-4 w-full sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <Link href="/new-case" className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
+          <Link href={newCaseHref} className="text-[#0f5238] dark:text-emerald-500 hover:bg-[#e2e3df] dark:hover:bg-stone-800 transition-colors p-2 rounded-full active:scale-95 duration-150">
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
           <AppLogo href="/cases" size={104} />
@@ -102,7 +140,7 @@ export default function HealthStatus() {
           {/* Confidence Level Indicator */}
           <div className="pt-4 space-y-2 max-w-xs mx-auto">
             <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[var(--color-outline)]">
-              <span>AI Confidence</span>
+              <span>Dr Morgees confidence</span>
               <span>{caseState.confidence}%</span>
             </div>
             <div className="h-3 w-full bg-[var(--color-surface-container-high)] rounded-full overflow-hidden">
@@ -148,7 +186,7 @@ export default function HealthStatus() {
           <p className="text-xs text-[var(--color-outline)] text-center px-2">{caseState.assessmentDisclaimer}</p>
         )}
 
-        {caseState.caseId && (
+        {activeCaseId && (
           <section className="rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-container-low)] p-4 space-y-3">
             <p className="font-headline font-bold text-[var(--color-on-surface)]">Analysis saved</p>
             <p className="text-sm text-[var(--color-on-surface-variant)]">
@@ -156,7 +194,7 @@ export default function HealthStatus() {
             </p>
             <div className="flex flex-col gap-2">
               <Link
-                href={`/case/${caseState.caseId}`}
+                href={`/case/${activeCaseId}`}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] text-white font-headline font-bold py-3 px-4 hover:opacity-95 active:scale-[0.99]"
               >
                 <span className="material-symbols-outlined text-xl">folder_open</span>
@@ -177,13 +215,13 @@ export default function HealthStatus() {
                 Treatment options (from database)
               </Link>
               <Link
-                href={`/follow-up?case=${caseState.caseId}`}
+                href={`/follow-up?case=${activeCaseId}`}
                 className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-[var(--color-on-surface-variant)] py-2 underline underline-offset-2"
               >
                 Add follow-up notes
               </Link>
               <Link
-                href={`/records?case=${caseState.caseId}`}
+                href={`/records?case=${activeCaseId}`}
                 className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-[var(--color-primary)] py-2 underline underline-offset-2"
               >
                 Attach farm record to this case
@@ -215,7 +253,7 @@ export default function HealthStatus() {
 
           {/* What You Reported */}
           <Link
-            href="/new-case"
+            href={newCaseHref}
             className="bg-[var(--color-surface-container-low)] rounded-lg p-6 space-y-4 block cursor-pointer hover:bg-[var(--color-surface-container-high)] transition-colors active:scale-[0.99]"
           >
             <div className="flex items-center gap-3">
@@ -238,14 +276,22 @@ export default function HealthStatus() {
           </Link>
         </div>
 
-        {/* Monitoring Checklist */}
+        {/* Monitoring Checklist — each link opens a case-aware track on guided inspection */}
         <section className="bg-[var(--color-surface-container-lowest)] rounded-xl p-8 space-y-6">
-          <Link href={guidedHref} className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2 cursor-pointer hover:text-[var(--color-primary)] w-fit">
-            Monitoring Checklist
-          </Link>
+          <div>
+            <Link
+              href={guidedDefault}
+              className="font-headline font-extrabold text-xl text-[var(--color-on-surface)] flex items-center gap-2 cursor-pointer hover:text-[var(--color-primary)] w-fit"
+            >
+              Monitoring Checklist
+            </Link>
+            {activeCaseId && (
+              <p className="mt-2 text-sm text-[var(--color-on-surface-variant)] leading-relaxed">{checklistIntro}</p>
+            )}
+          </div>
           <div className="space-y-4">
             <Link
-              href={guidedHref}
+              href={guidedEating}
               className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
             >
               <div className="flex items-center gap-4">
@@ -255,7 +301,7 @@ export default function HealthStatus() {
               <span className="material-symbols-outlined text-[var(--color-outline)] text-sm">chevron_right</span>
             </Link>
             <Link
-              href={guidedHref}
+              href={guidedWater}
               className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
             >
               <div className="flex items-center gap-4">
@@ -265,7 +311,7 @@ export default function HealthStatus() {
               <span className="material-symbols-outlined text-[var(--color-outline)] text-sm">chevron_right</span>
             </Link>
             <Link
-              href={guidedHref}
+              href={guidedMovement}
               className="w-full flex items-center justify-between p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer hover:bg-[var(--color-surface-container-high)] text-left active:scale-[0.99] transition-all"
             >
               <div className="flex items-center gap-4">
@@ -279,13 +325,16 @@ export default function HealthStatus() {
 
         {/* Action Button */}
         <div className="pt-4 pb-10">
-          <Link href={guidedHref} className="w-full h-14 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] text-[var(--color-on-primary)] font-headline font-bold text-lg rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-transform flex items-center justify-center gap-2">
+          <Link
+            href={guidedVisual}
+            className="w-full h-14 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-container)] text-[var(--color-on-primary)] font-headline font-bold text-lg rounded-full shadow-[0px_12px_32px_rgba(44,105,78,0.2)] active:scale-95 transition-transform flex items-center justify-center gap-2"
+          >
             <span className="material-symbols-outlined">update</span>
             Check Again Later
           </Link>
           <div className="text-center mt-4">
-            <Link href={guidedHref} className="text-[var(--color-on-surface-variant)] text-sm underline">
-              Or proceed to Guided Inspection
+            <Link href={guidedDefault} className="text-[var(--color-on-surface-variant)] text-sm underline">
+              Or proceed to guided inspection (eyes &amp; media)
             </Link>
           </div>
         </div>
@@ -293,5 +342,17 @@ export default function HealthStatus() {
 
       <BottomNavBar />
     </>
+  );
+}
+
+export default function HealthStatus() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen pt-28 text-center text-[var(--color-on-surface-variant)]">Loading…</div>
+      }
+    >
+      <HealthStatusInner />
+    </Suspense>
   );
 }

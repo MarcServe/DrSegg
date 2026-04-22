@@ -11,8 +11,7 @@ import { TreatmentRowDisplay } from "@/components/TreatmentRowDisplay";
 import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
 import type { KnowledgeMatch } from "@/lib/ai/schemas";
 import type { TreatmentRow } from "@/lib/ai/treatments";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { CASE_UUID_RE, getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
 
 /** Hydrated snapshots may omit newer fields; keep UI consistent */
 function normalizeTreatmentRow(t: TreatmentRow): TreatmentRow {
@@ -72,7 +71,7 @@ function AnalysisResultInner() {
   const [assessmentHistory, setAssessmentHistory] = useState<AssessmentHistoryItem[]>([]);
 
   useEffect(() => {
-    if (!caseParam || !UUID_RE.test(caseParam)) {
+    if (!caseParam || !CASE_UUID_RE.test(caseParam)) {
       setHydrateState("done");
       return;
     }
@@ -188,7 +187,9 @@ function AnalysisResultInner() {
 
   const iconKey = caseState.animalType ? animalTypeToIconKey(caseState.animalType) : null;
 
-  const caseQuery = caseState.caseId ? `?case=${caseState.caseId}` : "";
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const activeCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
+  const caseQuery = activeCaseId ? `?case=${activeCaseId}` : "";
 
   return (
     <>
@@ -260,21 +261,21 @@ function AnalysisResultInner() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <Link
-              href={caseState.caseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
+              href={activeCaseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
               className="flex-1 text-center rounded-xl bg-[var(--color-primary)] text-white font-headline font-bold py-4 px-4 hover:opacity-95 active:scale-[0.99]"
             >
               Treatment options
             </Link>
-            {caseState.caseId && (
+            {activeCaseId && (
               <Link
-                href={`/case/${caseState.caseId}`}
+                href={`/case/${activeCaseId}`}
                 className="flex-1 text-center rounded-xl border-2 border-[var(--color-primary)] text-[var(--color-primary)] font-bold py-4 px-4 hover:bg-[var(--color-primary)]/5"
               >
                 Open case file
               </Link>
             )}
           </div>
-          {caseState.caseId && (
+          {activeCaseId && (
             <>
               <Link
                 href={`/records${caseQuery}`}
@@ -295,7 +296,7 @@ function AnalysisResultInner() {
         {assessmentHistory.length > 1 && (
           <section className="space-y-3">
             <h3 className="font-headline text-lg font-bold text-[var(--color-on-surface)] px-1">
-              Earlier AI reports on this case ({assessmentHistory.length - 1})
+              Earlier Dr Morgees reports on this case ({assessmentHistory.length - 1})
             </h3>
             <p className="text-xs text-[var(--color-outline)] px-1">
               New analyses and follow-up context are stored together on one case file.
@@ -407,7 +408,7 @@ function AnalysisResultInner() {
             <div className="flex items-center justify-between gap-2 px-1">
               <h3 className="font-headline text-lg font-bold text-[var(--color-on-surface)]">Treatment plan</h3>
               <Link
-                href={caseState.caseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
+                href={activeCaseId ? `/treatment-options${caseQuery}` : "/treatment-options"}
                 className="text-sm font-bold text-[var(--color-primary)] hover:underline"
               >
                 Full list →
@@ -442,7 +443,7 @@ function AnalysisResultInner() {
 
         <div className="flex flex-col gap-3 pt-4">
           <Link
-            href={caseState.caseId ? `/guided-inspection?case=${caseState.caseId}` : "/guided-inspection"}
+            href={activeCaseId ? `/guided-inspection?case=${activeCaseId}` : "/guided-inspection"}
             className="text-center font-semibold text-[var(--color-primary)] py-2 hover:underline"
           >
             Guided inspection checklist

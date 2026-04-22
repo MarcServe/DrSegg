@@ -15,7 +15,7 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   title: "Dr Segg",
-  description: "AI Livestock Health Assistant",
+  description: "Dr Morgees — farm & pet health assistant",
   icons: {
     icon: "/dr-morgees-logo.png",
     apple: "/dr-morgees-logo.png",

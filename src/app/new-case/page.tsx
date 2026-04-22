@@ -6,8 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
 import { AnimalIcon } from "@/components/AnimalIcon";
 import { createClient } from "@/lib/supabase/client";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { CASE_UUID_RE, getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
 
 function parseSymptoms(text: string): string[] {
   return text
@@ -29,6 +28,8 @@ function NewCaseForm() {
     setAssessmentDetails,
     setRegion,
   } = useCase();
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const effectiveCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [symptomText, setSymptomText] = useState("");
   const [mediaFiles, setMediaFiles] = useState<{ file: File; kind: "image" | "video" }[]>([]);
@@ -48,15 +49,14 @@ function NewCaseForm() {
   }, [searchParams, setAnimalType]);
 
   useEffect(() => {
-    const c = searchParams.get("case");
-    if (c && UUID_RE.test(c) && c !== caseState.caseId) {
-      setCaseId(c);
+    if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
+      setCaseId(caseIdFromUrl);
     }
-  }, [searchParams, setCaseId, caseState.caseId]);
+  }, [caseIdFromUrl, setCaseId, caseState.caseId]);
 
   useEffect(() => {
-    const c = searchParams.get("case");
-    if (!c || !UUID_RE.test(c)) return;
+    if (!caseIdFromUrl) return;
+    const c = caseIdFromUrl;
     let cancelled = false;
     (async () => {
       try {
@@ -72,7 +72,7 @@ function NewCaseForm() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, setAnimalType]);
+  }, [caseIdFromUrl, setAnimalType]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -157,8 +157,8 @@ function NewCaseForm() {
         symptoms,
         storage_paths: storagePaths,
       };
-      if (caseState.caseId && UUID_RE.test(caseState.caseId)) {
-        analyzeBody.case_id = caseState.caseId;
+      if (effectiveCaseId && CASE_UUID_RE.test(effectiveCaseId)) {
+        analyzeBody.case_id = effectiveCaseId;
       }
 
       const response = await fetch("/api/analyze", {
@@ -200,7 +200,7 @@ function NewCaseForm() {
         modelUsed: data.model_used ?? null,
       });
 
-      router.push("/health-status");
+      router.push(data.case_id ? `/health-status?case=${data.case_id}` : "/health-status");
     } catch (error) {
       console.error("Failed to analyze case:", error);
       alert("Failed to analyze case");
@@ -323,16 +323,16 @@ function NewCaseForm() {
       </header>
 
       <main className="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-12">
-        {caseState.caseId && UUID_RE.test(caseState.caseId) && (
+        {effectiveCaseId && (
           <div className="rounded-xl border border-[var(--color-primary)]/35 bg-[var(--color-primary-container)]/10 px-4 py-3 text-sm">
             <p className="font-headline font-bold text-[var(--color-primary)]">Updating an existing case</p>
             <p className="text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">
               Symptoms and media below are added to this case and merged with follow-ups and prior reports.{" "}
-              <Link href={`/case/${caseState.caseId}`} className="font-semibold text-[var(--color-primary)] underline">
+              <Link href={`/case/${effectiveCaseId}`} className="font-semibold text-[var(--color-primary)] underline">
                 Case file
               </Link>
               {" · "}
-              <Link href={`/analysis-result?case=${caseState.caseId}`} className="font-semibold text-[var(--color-primary)] underline">
+              <Link href={`/analysis-result?case=${effectiveCaseId}`} className="font-semibold text-[var(--color-primary)] underline">
                 Full report history
               </Link>
             </p>
@@ -539,7 +539,7 @@ function NewCaseForm() {
               </div>
               <div>
                 <span className="block font-headline text-lg font-bold">Camera video</span>
-                <span className="font-body text-sm text-[var(--color-outline)]">Short clip for AI</span>
+                <span className="font-body text-sm text-[var(--color-outline)]">Short clip for Dr Morgees</span>
               </div>
             </button>
           </div>
@@ -585,13 +585,13 @@ function NewCaseForm() {
         </section>
 
         <Link
-          href="/guided-inspection"
+          href={effectiveCaseId ? `/guided-inspection?case=${effectiveCaseId}` : "/guided-inspection"}
           className="grid grid-cols-1 gap-4 mt-8 opacity-90 hover:opacity-100 transition-opacity"
         >
           <div className="flex items-center gap-4 p-4 bg-[var(--color-surface-container-low)] rounded-lg cursor-pointer active:scale-[0.99]">
             <span className="material-symbols-outlined text-[var(--color-primary)]">auto_awesome</span>
             <p className="font-body text-sm text-[var(--color-on-surface-variant)] font-medium">
-              AI analysis uses your symptoms and any images you upload when configured.
+              Dr Morgees analysis uses your symptoms and any images you upload when configured.
             </p>
           </div>
         </Link>
@@ -605,7 +605,7 @@ function NewCaseForm() {
           className={`flex items-center gap-3 px-8 py-4 bg-[var(--color-primary)] text-white rounded-full shadow-2xl font-headline font-bold tracking-tight hover:opacity-90 active:scale-90 duration-150 cursor-pointer ${!caseState.animalType || isAnalyzing ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <span>
-            {isAnalyzing ? "Analyzing..." : caseState.caseId && UUID_RE.test(caseState.caseId) ? "Merge & analyze case" : "Analyze Case"}
+            {isAnalyzing ? "Analyzing..." : effectiveCaseId ? "Merge & analyze case" : "Analyze Case"}
           </span>
           <span className="material-symbols-outlined">
             {isAnalyzing ? "hourglass_empty" : "arrow_forward"}

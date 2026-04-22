@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       const fp = formatFollowupsForPrompt(followupRows);
       const prior = lastAi?.summary?.trim();
       followupContext = [
-        prior && `Previous AI assessment summary:\n${prior}`,
+        prior && `Previous Dr Morgees assessment summary:\n${prior}`,
         fp && `Follow-up log (oldest first):\n${fp}`,
       ]
         .filter(Boolean)

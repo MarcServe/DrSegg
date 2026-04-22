@@ -8,8 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
 import { AnimalIcon, animalTypeToIconKey } from "@/components/AnimalIcon";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
 
 type CaseBundle = {
   region: string;
@@ -36,14 +35,14 @@ function FollowUpContent() {
   const [reassessMedia, setReassessMedia] = useState<{ file: File; kind: "image" | "video" }[]>([]);
   const reassessFileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const c = searchParams.get("case");
-    if (c && UUID_RE.test(c) && c !== caseState.caseId) {
-      setCaseId(c);
-    }
-  }, [searchParams, setCaseId, caseState.caseId]);
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const effectiveCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
 
-  const effectiveCaseId = caseState.caseId;
+  useEffect(() => {
+    if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
+      setCaseId(caseIdFromUrl);
+    }
+  }, [caseIdFromUrl, setCaseId, caseState.caseId]);
 
   useEffect(() => {
     if (!effectiveCaseId) {
@@ -167,7 +166,7 @@ function FollowUpContent() {
       setReassessMedia([]);
       router.push(`/analysis-result?case=${effectiveCaseId}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not run AI reassessment");
+      alert(e instanceof Error ? e.message : "Could not run Dr Morgees reassessment");
     } finally {
       setReassessBusy(false);
     }
@@ -226,7 +225,7 @@ function FollowUpContent() {
             <div className="flex items-center gap-2 mt-1">
               <div className="w-3 h-3 bg-[var(--color-primary)] rounded-full" />
               <span className="text-sm font-semibold text-[var(--color-on-surface-variant)]">
-                Notes are saved on this case and included when you run an AI reassessment.
+                Notes are saved on this case and included when you run a Dr Morgees reassessment.
               </span>
             </div>
           </div>
@@ -240,7 +239,7 @@ function FollowUpContent() {
             </p>
           ) : bundle && bundle.followups.length === 0 ? (
             <p className="text-sm text-[var(--color-on-surface-variant)] rounded-xl border border-dashed border-[var(--color-outline-variant)] p-4">
-              No follow-ups yet. Add notes below — they are stored for your records and for the next AI review.
+              No follow-ups yet. Add notes below — they are stored for your records and for the next Dr Morgees review.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -303,7 +302,7 @@ function FollowUpContent() {
 
         <section className="space-y-3 rounded-xl border border-[var(--color-outline-variant)]/30 bg-[var(--color-surface-container-low)]/50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-headline font-bold text-[var(--color-on-surface)]">Media for AI reassessment</h3>
+            <h3 className="font-headline font-bold text-[var(--color-on-surface)]">Media for Dr Morgees reassessment</h3>
             <button
               type="button"
               onClick={() => reassessFileInputRef.current?.click()}
@@ -372,7 +371,7 @@ function FollowUpContent() {
             }
           >
             <span className="material-symbols-outlined text-xl">psychology</span>
-            {reassessBusy ? "Analyzing…" : "Run AI reassessment"}
+            {reassessBusy ? "Analyzing…" : "Run Dr Morgees reassessment"}
           </button>
         </div>
         {!effectiveCaseId && (

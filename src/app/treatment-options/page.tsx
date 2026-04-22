@@ -8,6 +8,7 @@ import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
 import { TreatmentRowDisplay } from "@/components/TreatmentRowDisplay";
 import type { TreatmentRow } from "@/lib/ai/treatments";
+import { getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
 
 function TreatmentCard({ t, followUpHref }: { t: TreatmentRow; followUpHref: string }) {
   return (
@@ -28,15 +29,17 @@ function TreatmentOptionsInner() {
   const [isLoading, setIsLoading] = useState(true);
   const [resolvedConditionName, setResolvedConditionName] = useState<string | null>(null);
 
-  const followUpHref = caseState.caseId ? `/follow-up?case=${caseState.caseId}` : "/follow-up";
-  const backHref = caseState.caseId ? `/case/${caseState.caseId}` : "/analysis-result";
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const effectiveCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
+
+  const followUpHref = effectiveCaseId ? `/follow-up?case=${effectiveCaseId}` : "/follow-up";
+  const backHref = effectiveCaseId ? `/case/${effectiveCaseId}` : "/analysis-result";
 
   useEffect(() => {
-    const c = searchParams.get("case");
-    if (c && /^[0-9a-f-]{36}$/i.test(c) && c !== caseState.caseId) {
-      setCaseId(c);
+    if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
+      setCaseId(caseIdFromUrl);
     }
-  }, [searchParams, setCaseId, caseState.caseId]);
+  }, [caseIdFromUrl, setCaseId, caseState.caseId]);
 
   useEffect(() => {
     const fetchTreatments = async () => {
@@ -45,9 +48,9 @@ function TreatmentOptionsInner() {
           region: caseState.region,
           condition: caseState.possibleConditions[0] || "",
           species: caseState.animalType || "poultry",
-          caseId: caseState.caseId,
+          caseId: effectiveCaseId,
         };
-        if (!caseState.caseId) {
+        if (!effectiveCaseId) {
           payload.condition_code = caseState.knowledgeMatches[0]?.condition_code;
         }
         const response = await fetch("/api/treatment", {
@@ -74,7 +77,7 @@ function TreatmentOptionsInner() {
     };
 
     fetchTreatments();
-  }, [caseState]);
+  }, [caseState, effectiveCaseId]);
 
   return (
     <>

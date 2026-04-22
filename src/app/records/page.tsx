@@ -7,6 +7,7 @@ import BottomNavBar from "@/components/BottomNavBar";
 import { CaseNameEditor } from "@/components/CaseNameEditor";
 import { createClient } from "@/lib/supabase/client";
 import { isMissingDisplayNameColumn } from "@/lib/case-detail-select";
+import { getCaseIdFromUrl } from "@/lib/case-url";
 
 type CaseOption = {
   id: string;
@@ -131,10 +132,8 @@ function RecordsContent() {
   }, [load, loadCases]);
 
   useEffect(() => {
-    const raw = searchParams.get("case");
-    if (raw && /^[0-9a-f-]{36}$/i.test(raw)) {
-      setOptionalCaseId(raw);
-    }
+    const id = getCaseIdFromUrl(searchParams);
+    if (id) setOptionalCaseId(id);
   }, [searchParams]);
 
   useEffect(() => {

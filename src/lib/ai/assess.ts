@@ -19,7 +19,7 @@ export type CaseAssessmentResult = {
 };
 
 const DISCLAIMER =
-  "This is an AI-assisted triage summary, not a diagnosis. Always consult a qualified veterinarian for examination, testing, and treatment decisions.";
+  "This is a Dr Morgees–assisted triage summary, not a diagnosis. Always consult a qualified veterinarian for examination, testing, and treatment decisions.";
 
 function fallbackEnabled(): boolean {
   return process.env.AI_FALLBACK_ENABLED !== "false";

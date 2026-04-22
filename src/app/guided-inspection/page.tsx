@@ -1,14 +1,19 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCase } from "@/context/CaseContext";
 import { createClient } from "@/lib/supabase/client";
 import BottomNavBar from "@/components/BottomNavBar";
 import { AppLogo } from "@/components/AppLogo";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import {
+  getMonitoringContent,
+  parseMonitoringTrack,
+  type MonitoringContext,
+  type MonitoringTrack,
+} from "@/lib/monitoring-tips";
+import { getCaseIdFromUrl, resolveEffectiveCaseId } from "@/lib/case-url";
 
 function safeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -23,9 +28,33 @@ function GuidedInspectionInner() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const paramCase = searchParams.get("case");
-  const caseIdFromUrl = paramCase && UUID_RE.test(paramCase) ? paramCase : null;
-  const effectiveCaseId = caseIdFromUrl || caseState.caseId;
+  const caseIdFromUrl = getCaseIdFromUrl(searchParams);
+  const effectiveCaseId = resolveEffectiveCaseId(caseIdFromUrl, caseState.caseId);
+
+  const track: MonitoringTrack = useMemo(
+    () => parseMonitoringTrack(searchParams.get("track")),
+    [searchParams]
+  );
+
+  const monitoringCtx: MonitoringContext = useMemo(
+    () => ({
+      species: caseState.animalType || "",
+      symptoms: caseState.symptoms,
+      suggestedNextChecks: caseState.suggestedNextChecks,
+      possibleConditions: caseState.possibleConditions,
+      redFlags: caseState.redFlags,
+    }),
+    [
+      caseState.animalType,
+      caseState.symptoms,
+      caseState.suggestedNextChecks,
+      caseState.possibleConditions,
+      caseState.redFlags,
+    ]
+  );
+
+  const copy = useMemo(() => getMonitoringContent(track, monitoringCtx), [track, monitoringCtx]);
+  const isVisual = track === "visual";
 
   useEffect(() => {
     if (caseIdFromUrl && caseIdFromUrl !== caseState.caseId) {
@@ -33,53 +62,68 @@ function GuidedInspectionInner() {
     }
   }, [caseIdFromUrl, caseState.caseId, setCaseId]);
 
-  const uploadFiles = async (files: FileList | null) => {
-    if (!files?.length || !effectiveCaseId) return;
-    setUploadBusy(true);
-    setUploadMessage(null);
-    try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push(`/login?next=${encodeURIComponent(`/guided-inspection?case=${effectiveCaseId}`)}`);
-        return;
-      }
+  const currentQueryPath = useCallback(() => {
+    const p = new URLSearchParams();
+    if (effectiveCaseId) p.set("case", effectiveCaseId);
+    if (track !== "visual") p.set("track", track);
+    const s = p.toString();
+    return s ? `/guided-inspection?${s}` : "/guided-inspection";
+  }, [effectiveCaseId, track]);
 
-      let ok = 0;
-      for (const file of Array.from(files)) {
-        const isVideo = file.type.startsWith("video/");
-        const path = `${user.id}/staging/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-        const { error: upErr } = await supabase.storage.from("case-media").upload(path, file, {
-          upsert: false,
-          contentType: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
-        });
-        if (upErr) {
-          setUploadMessage(upErr.message || "Upload failed");
-          continue;
+  const uploadFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length || !effectiveCaseId) return;
+      setUploadBusy(true);
+      setUploadMessage(null);
+      const label = copy.uploadLabel;
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          router.push(`/login?next=${encodeURIComponent(currentQueryPath())}`);
+          return;
         }
-        const { error: insErr } = await supabase.from("case_inputs").insert({
-          case_id: effectiveCaseId,
-          type: isVideo ? "video" : "image",
-          file_url: path,
-          transcription: `Guided inspection — eyes (${isVideo ? "video" : "photo"})`,
-        });
-        if (insErr) {
-          setUploadMessage(insErr.message || "Could not attach to case");
-          continue;
+
+        let ok = 0;
+        for (const file of Array.from(files)) {
+          const isVideo = file.type.startsWith("video/");
+          const path = `${user.id}/staging/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+          const { error: upErr } = await supabase.storage.from("case-media").upload(path, file, {
+            upsert: false,
+            contentType: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+          });
+          if (upErr) {
+            setUploadMessage(upErr.message || "Upload failed");
+            continue;
+          }
+          const { error: insErr } = await supabase.from("case_inputs").insert({
+            case_id: effectiveCaseId,
+            type: isVideo ? "video" : "image",
+            file_url: path,
+            transcription: `${label} (${isVideo ? "video" : "photo"})`,
+          });
+          if (insErr) {
+            setUploadMessage(insErr.message || "Could not attach to case");
+            continue;
+          }
+          ok += 1;
         }
-        ok += 1;
+        if (ok > 0) {
+          setUploadMessage(
+            `Saved ${ok} file${ok === 1 ? "" : "s"} to your case. You can run analysis from New case or Follow-up.`
+          );
+        }
+      } finally {
+        setUploadBusy(false);
       }
-      if (ok > 0) {
-        setUploadMessage(`Saved ${ok} file${ok === 1 ? "" : "s"} to your case. You can run analysis from New case or Follow-up.`);
-      }
-    } finally {
-      setUploadBusy(false);
-    }
-  };
+    },
+    [copy.uploadLabel, currentQueryPath, effectiveCaseId, router]
+  );
 
   const caseHref = effectiveCaseId ? `/case/${effectiveCaseId}` : null;
+  const badgeLabel = isVisual ? "Inspection point" : "Monitoring focus";
 
   return (
     <>
@@ -109,11 +153,13 @@ function GuidedInspectionInner() {
           <div className="flex justify-between items-end mb-3 gap-2">
             <div>
               <p className="text-[var(--color-on-surface-variant)] font-label text-sm font-bold uppercase tracking-widest">
-                Guided checklist
+                {copy.section}
               </p>
-              <p className="font-headline font-extrabold text-2xl text-[var(--color-primary)] mt-1">
-                Visual inspection
-              </p>
+              {isVisual && (
+                <p className="font-headline font-extrabold text-2xl text-[var(--color-primary)] mt-1">
+                  Visual inspection
+                </p>
+              )}
             </div>
             <div className="text-right text-sm">
               {effectiveCaseId ? (
@@ -138,7 +184,7 @@ function GuidedInspectionInner() {
           <div className="h-3 w-full bg-[var(--color-surface-container-high)] rounded-full overflow-hidden">
             <div
               className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-500"
-              style={{ width: "35%" }}
+              style={{ width: `${copy.progressPct}%` }}
             />
           </div>
         </div>
@@ -149,45 +195,50 @@ function GuidedInspectionInner() {
             <div className="relative z-10">
               <div className="inline-flex items-center gap-2 bg-[var(--color-primary-fixed)] px-4 py-1.5 rounded-full mb-6">
                 <span className="material-symbols-outlined text-[var(--color-on-primary-fixed)] filled-icon">
-                  visibility
+                  {copy.heroIcon}
                 </span>
                 <span className="text-[var(--color-on-primary-fixed)] font-headline font-bold text-sm uppercase tracking-wide">
-                  Inspection point
+                  {badgeLabel}
                 </span>
               </div>
               <h2 className="font-manrope text-3xl font-extrabold text-[var(--color-on-surface)] mb-4">
-                The eyes
+                {copy.title}
               </h2>
-              <p className="text-lg text-[var(--color-on-surface-variant)] leading-relaxed max-w-md">
-                Check both eyes closely. Look for{" "}
-                <span className="font-bold text-[var(--color-on-surface)]">
-                  discharge, cloudiness, or unusual redness
-                </span>{" "}
-                around the socket.{" "}
-                {effectiveCaseId ? (
+              <p className="text-lg text-[var(--color-on-surface-variant)] leading-relaxed max-w-prose">
+                {copy.lead}
+                {effectiveCaseId && (
                   <>
+                    {" "}
                     Use <strong className="text-[var(--color-on-surface)]">Take photo</strong> or{" "}
                     <strong className="text-[var(--color-on-surface)]">Record video</strong> below — files attach to this
-                    case for AI review.
+                    case for Dr Morgees review.
                   </>
-                ) : (
+                )}
+                {!effectiveCaseId && (
                   <>
-                    Record a short clip or photo below, or start a{" "}
+                    {" "}
                     <Link href="/new-case" className="text-[var(--color-primary)] font-bold underline underline-offset-2">
-                      New case
+                      Start a case
                     </Link>{" "}
-                    for a full workup.
+                    to save media here, or go to <Link href="/cases" className="font-bold underline">Cases</Link>.
                   </>
                 )}
               </p>
+              {!isVisual && copy.tips.length > 0 && (
+                <ul className="mt-4 list-disc pl-5 space-y-2 text-[var(--color-on-surface)] text-base max-w-prose">
+                  {copy.tips.map((t, i) => (
+                    <li key={i}>{t}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="mt-8 flex h-56 sm:h-64 items-center justify-center rounded-lg border-4 border-[var(--color-surface-container-high)] bg-[var(--color-surface-container-low)]">
               <div className="flex flex-col items-center gap-3 px-6 text-center text-[var(--color-primary)]">
-                <span className="material-symbols-outlined text-6xl">visibility</span>
+                <span className="material-symbols-outlined text-6xl">{copy.heroIcon}</span>
                 <span className="font-label text-sm font-bold uppercase tracking-wider text-[var(--color-on-surface-variant)]">
                   {effectiveCaseId
                     ? "Upload attaches to your case — steady lighting, avoid glare"
-                    : "Use steady lighting, avoid glare — link a case to save here"}
+                    : "Link a case from Health status or New case to save uploads here"}
                 </span>
               </div>
             </div>
@@ -202,10 +253,7 @@ function GuidedInspectionInner() {
               <span className="material-symbols-outlined text-[var(--color-primary-container)]">info</span>
               <div>
                 <p className="font-bold text-[var(--color-on-surface-variant)] text-sm uppercase">Tip</p>
-                <p className="text-[var(--color-on-surface-variant)] text-sm mt-1">
-                  Healthy eyes are bright and clear. Avoid harsh glare when filming; steady the phone for clearer AI
-                  review.
-                </p>
+                <p className="text-[var(--color-on-surface-variant)] text-sm mt-1">{copy.tipBox}</p>
               </div>
             </div>
           </div>
@@ -284,8 +332,8 @@ function GuidedInspectionInner() {
               <Link href="/cases" className="font-bold text-[var(--color-primary)] underline">
                 Open a case
               </Link>{" "}
-              and use &quot;Guided inspection&quot; from there, or add{" "}
-              <span className="font-mono text-xs">?case=…</span> to this page&apos;s URL to attach media to that case.
+              and use the monitoring checklist on Health status, or add <span className="font-mono text-xs">?case=…</span> to this
+              page&apos;s URL to attach media to that case.
             </p>
           )}
 
