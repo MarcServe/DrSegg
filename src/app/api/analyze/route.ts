@@ -152,6 +152,7 @@ export async function POST(request: Request) {
         recommendation_type: a.recommendation_type,
         knowledge_matches: outcome.knowledge_matches,
         treatments: outcome.treatments,
+        resolved_condition_code: outcome.top_condition_code,
         model_used: outcome.model_used,
         disclaimer: outcome.disclaimer,
         message: "Follow-up context included. Assessment updated for this case.",
@@ -211,6 +212,7 @@ export async function POST(request: Request) {
       recommendation_type: a.recommendation_type,
       knowledge_matches: outcome.knowledge_matches,
       treatments: outcome.treatments,
+      resolved_condition_code: outcome.top_condition_code,
       model_used: outcome.model_used,
       disclaimer: outcome.disclaimer,
       message:

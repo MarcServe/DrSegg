@@ -12,6 +12,7 @@ type ConditionRow = {
   notifiable?: boolean | null;
   severity_hint?: string | null;
   category?: string | null;
+  clinical_intelligence?: unknown | null;
 };
 
 type ChunkRow = {
@@ -84,7 +85,7 @@ export async function matchConditions(
   const { data: conditions, error: cErr } = await supabase
     .from("knowledge_conditions")
     .select(
-      "id, condition_code, condition_name, species, common_symptoms, requires_vet, notifiable, severity_hint, category"
+      "id, condition_code, condition_name, species, common_symptoms, requires_vet, notifiable, severity_hint, category, clinical_intelligence"
     );
 
   if (cErr || !conditions?.length) {
@@ -109,6 +110,7 @@ export async function matchConditions(
     notifiable: c.notifiable ?? null,
     severity_hint: c.severity_hint ?? null,
     category: c.category ?? null,
+    clinical_intelligence: c.clinical_intelligence ?? undefined,
   }));
 
   const queryEmbedding = await embedText(symptoms.join(" ") || animal);

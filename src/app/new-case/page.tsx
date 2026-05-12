@@ -198,6 +198,8 @@ function NewCaseForm() {
         knowledgeMatches: data.knowledge_matches ?? [],
         treatments: data.treatments ?? [],
         modelUsed: data.model_used ?? null,
+        resolvedConditionCode:
+          typeof data.resolved_condition_code === "string" ? data.resolved_condition_code : null,
       });
 
       router.push(data.case_id ? `/health-status?case=${data.case_id}` : "/health-status");

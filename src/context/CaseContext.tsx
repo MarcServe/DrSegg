@@ -28,6 +28,8 @@ interface CaseState {
   knowledgeMatches: KnowledgeMatch[];
   treatments: TreatmentRow[];
   modelUsed: string | null;
+  /** KB condition_code from analyze snapshot — matches server treatment resolution when present */
+  resolvedConditionCode: string | null;
 }
 
 interface CaseContextType {
@@ -65,6 +67,7 @@ const initialState: CaseState = {
   knowledgeMatches: [],
   treatments: [],
   modelUsed: null,
+  resolvedConditionCode: null,
 };
 
 const CaseContext = createContext<CaseContextType | undefined>(undefined);

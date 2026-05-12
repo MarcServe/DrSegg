@@ -35,6 +35,8 @@ export type KnowledgeMatch = {
   notifiable?: boolean | null;
   severity_hint?: string | null;
   category?: string | null;
+  /** Optional JSON envelope from DB — surfaced as brief triage excerpt in prompts */
+  clinical_intelligence?: unknown;
 };
 
 /** Some models return differential confidence as 0–100 instead of 0–1. */

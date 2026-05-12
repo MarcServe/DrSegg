@@ -44,9 +44,13 @@ function pickTopConditionCode(
   knowledge: KnowledgeMatch[],
   assessment: LlmAssessmentJson
 ): string | null {
+  const likelyLabel =
+    assessment.differential_diagnoses?.[0]?.condition ??
+    assessment.possible_conditions?.[0] ??
+    null;
   return pickConditionCodeForTreatment(
     knowledge,
-    assessment.differential_diagnoses?.[0]?.condition ?? null,
+    likelyLabel,
     assessment.differential_diagnoses ?? null
   );
 }
@@ -147,14 +151,27 @@ export async function runCaseAssessment(
 
   let treatments: TreatmentRow[] = [];
   const band = confidenceBand(assessment.confidence);
-  const allowDrugs =
+  const strictTreatmentsGate =
+    process.env.TREATMENTS_CONFIDENT_GATE === "true" ||
+    process.env.TREATMENTS_ONLY_WHEN_CONFIDENT === "true";
+  const legacyDrugGate =
     band === "likely" &&
     !assessment.needs_more_info &&
     assessment.recommendation_type !== "emergency" &&
     assessment.recommendation_type !== "pending_more_info" &&
     assessment.health_status !== "healthy";
 
-  if (allowDrugs && top_condition_code) {
+  let fetchTreatments = !!(top_condition_code && top_condition_code.length > 0);
+  if (strictTreatmentsGate) {
+    fetchTreatments = fetchTreatments && legacyDrugGate;
+  } else {
+    const suppressTreatments =
+      assessment.recommendation_type === "emergency" ||
+      assessment.health_status === "critical";
+    fetchTreatments = fetchTreatments && !suppressTreatments;
+  }
+
+  if (fetchTreatments) {
     treatments = await fetchTreatmentsForCondition(supabase, {
       conditionCode: top_condition_code,
       species: args.animal,

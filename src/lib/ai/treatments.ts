@@ -4,6 +4,8 @@ export type TreatmentRow = {
   drug_name: string;
   generic_name: string | null;
   dosage_text: string | null;
+  /** Optional JSONB from `condition_treatments.protocol_detail` (migration-gated). */
+  protocol_detail?: unknown | null;
   /** Typical course length if applicable (from DB, informational) */
   course_duration_text: string | null;
   supportive_care: string | null;
@@ -17,6 +19,7 @@ export type TreatmentRow = {
 };
 
 type PlanRow = {
+  protocol_detail?: unknown | null;
   dosage_text: string | null;
   course_duration_text?: string | null;
   supportive_care: string | null;
@@ -77,8 +80,11 @@ export async function fetchTreatmentsForCondition(
   const row = cond as { id: string; condition_name: string | null };
   const conditionLabel = row.condition_name?.trim() || args.conditionCode.replace(/_/g, " ");
 
-  const selectWithImage = `
-      dosage_text,
+  const mkSelect = (withProtocol: boolean) => {
+    const p = withProtocol ? "protocol_detail,\n      " : "";
+    return {
+      withImage: `
+      ${p}dosage_text,
       course_duration_text,
       supportive_care,
       prescription_required,
@@ -92,10 +98,9 @@ export async function fetchTreatmentsForCondition(
         brand_name,
         image_url
       )
-    `;
-
-  const selectNoImage = `
-      dosage_text,
+    `,
+      noImage: `
+      ${p}dosage_text,
       course_duration_text,
       supportive_care,
       prescription_required,
@@ -108,10 +113,9 @@ export async function fetchTreatmentsForCondition(
         active_ingredient,
         brand_name
       )
-    `;
-
-  const selectWithImageNoDuration = `
-      dosage_text,
+    `,
+      withImageNoDuration: `
+      ${p}dosage_text,
       supportive_care,
       prescription_required,
       isolation_required,
@@ -124,10 +128,9 @@ export async function fetchTreatmentsForCondition(
         brand_name,
         image_url
       )
-    `;
-
-  const selectNoImageNoDuration = `
-      dosage_text,
+    `,
+      noImageNoDuration: `
+      ${p}dosage_text,
       supportive_care,
       prescription_required,
       isolation_required,
@@ -139,28 +142,40 @@ export async function fetchTreatmentsForCondition(
         active_ingredient,
         brand_name
       )
-    `;
+    `,
+    };
+  };
 
+  let selectWithProto = mkSelect(true);
   let plans: unknown[] | null = null;
   let pErr: { message?: string } | null = null;
   ({
     data: plans,
     error: pErr,
-  } = await supabase.from("condition_treatments").select(selectWithImage).eq("condition_id", cond.id));
+  } = await supabase.from("condition_treatments").select(selectWithProto.withImage).eq("condition_id", cond.id));
   plans = (plans as unknown[] | null) ?? null;
 
+  if (pErr && (pErr.message ?? "").toLowerCase().includes("protocol_detail")) {
+    selectWithProto = mkSelect(false);
+    ({
+      data: plans,
+      error: pErr,
+    } = await supabase.from("condition_treatments").select(selectWithProto.withImage).eq("condition_id", cond.id));
+    plans = (plans as unknown[] | null) ?? null;
+  }
+
   if (pErr && (pErr.message ?? "").toLowerCase().includes("course_duration_text")) {
-    const r2 = await supabase.from("condition_treatments").select(selectWithImageNoDuration).eq("condition_id", cond.id);
+    const r2 = await supabase.from("condition_treatments").select(selectWithProto.withImageNoDuration).eq("condition_id", cond.id);
     plans = (r2.data as unknown[] | null) ?? null;
     pErr = r2.error;
   }
   if (pErr && (pErr.message ?? "").toLowerCase().includes("image_url")) {
-    const r3 = await supabase.from("condition_treatments").select(selectNoImage).eq("condition_id", cond.id);
+    const r3 = await supabase.from("condition_treatments").select(selectWithProto.noImage).eq("condition_id", cond.id);
     plans = (r3.data as unknown[] | null) ?? null;
     pErr = r3.error;
   }
   if (pErr && (pErr.message ?? "").toLowerCase().includes("course_duration_text")) {
-    const r4 = await supabase.from("condition_treatments").select(selectNoImageNoDuration).eq("condition_id", cond.id);
+    const r4 = await supabase.from("condition_treatments").select(selectWithProto.noImageNoDuration).eq("condition_id", cond.id);
     plans = (r4.data as unknown[] | null) ?? null;
     pErr = r4.error;
   }
@@ -184,6 +199,7 @@ export async function fetchTreatmentsForCondition(
         drug_name: d.brand_name,
         generic_name: d.active_ingredient ?? null,
         dosage_text: p.dosage_text,
+        protocol_detail: p.protocol_detail ?? undefined,
         course_duration_text: p.course_duration_text?.trim() || null,
         supportive_care: p.supportive_care,
         prescription_required: p.prescription_required,
@@ -216,6 +232,7 @@ export async function fetchTreatmentsForCondition(
         drug_name: title,
         generic_name: null,
         dosage_text: p.dosage_text,
+        protocol_detail: p.protocol_detail ?? undefined,
         course_duration_text: p.course_duration_text?.trim() || null,
         supportive_care: p.supportive_care,
         prescription_required: p.prescription_required,

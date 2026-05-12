@@ -1,3 +1,4 @@
+import { summarizeClinicalIntelligenceForPrompt } from "./clinical-intelligence";
 import type { KnowledgeMatch } from "./schemas";
 
 /**
@@ -60,7 +61,9 @@ export function formatKnowledgeBaseSection(matches: KnowledgeMatch[]): string {
         ? `\n   Excerpt: ${k.chunk_excerpt.trim().slice(0, 500)}`
         : "";
     const flags = formatConditionFlags(k);
-    return `${i + 1}. ${k.condition_name} [code: ${k.condition_code}] — match score ${k.score.toFixed(3)}${flags}${excerpt}`;
+    const clinical = summarizeClinicalIntelligenceForPrompt(k.clinical_intelligence);
+    const ciLine = clinical ? `\n   Clinical intelligence (summarized): ${clinical}` : "";
+    return `${i + 1}. ${k.condition_name} [code: ${k.condition_code}] — match score ${k.score.toFixed(3)}${flags}${ciLine}${excerpt}`;
   });
   return `Knowledge base candidates (prioritize these for differentials and wording unless clearly inconsistent). When metadata notes reportability/severity, reflect appropriate urgency and regulatory caution without naming drugs or doses:\n${lines.join("\n")}`;
 }

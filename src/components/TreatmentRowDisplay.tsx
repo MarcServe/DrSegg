@@ -2,13 +2,37 @@
 
 import { useEffect, useState } from "react";
 import type { TreatmentRow } from "@/lib/ai/treatments";
+import {
+  describeTreatmentProtocolDetail,
+  protocolDetailNeedsRawFallback,
+} from "@/lib/ai/clinical-intelligence";
 import { DRUG_IMAGE_PLACEHOLDER, resolveDrugImageUrl } from "@/lib/drug-image";
+
+const PROTO_JSON_CAP = 4000;
+
+function protocolDetailJsonSnippet(detail: unknown): string {
+  try {
+    const s = JSON.stringify(detail, null, 2);
+    if (s.length <= PROTO_JSON_CAP) return s;
+    return `${s.slice(0, PROTO_JSON_CAP)}…`;
+  } catch {
+    return String(detail);
+  }
+}
 
 /** Shared layout: drug image, names, dosage, supportive care, regional / Rx badges */
 export function TreatmentRowDisplay({ t }: { t: TreatmentRow }) {
   const rx = t.prescription_required === true;
   const isolation = t.isolation_required === true;
   const localOk = t.available_in_your_region !== false;
+  const protocolLines =
+    t.protocol_detail !== undefined && t.protocol_detail !== null
+      ? describeTreatmentProtocolDetail(t.protocol_detail)
+      : [];
+  const protocolRawFallback =
+    t.protocol_detail !== undefined &&
+    t.protocol_detail !== null &&
+    protocolDetailNeedsRawFallback(t.protocol_detail);
   const initialSrc = resolveDrugImageUrl(t.image_url);
   const [imgSrc, setImgSrc] = useState(initialSrc);
 
@@ -86,6 +110,41 @@ export function TreatmentRowDisplay({ t }: { t: TreatmentRow }) {
             </span>
             <p className="mt-1 text-sm text-[var(--color-on-surface-variant)]">{t.supportive_care}</p>
           </div>
+        ) : null}
+        {protocolLines.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-[var(--color-primary)]/25 bg-[var(--color-primary-container)]/15 p-4">
+            <span className="font-label text-xs font-bold uppercase text-[var(--color-primary)]">
+              Protocol detail (database)
+            </span>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[var(--color-on-surface-variant)]">
+              {protocolLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-[var(--color-outline)]">
+              Confirm dosing, withdrawals, and flock rules with a veterinarian.
+            </p>
+          </div>
+        ) : null}
+        {protocolRawFallback ? (
+          <details className="mt-3 rounded-lg border border-[var(--color-outline-variant)]/30 p-3">
+            <summary className="cursor-pointer font-label text-xs font-bold uppercase text-[var(--color-outline)]">
+              Structured protocol data (JSON)
+            </summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-[var(--color-surface-container-low)] p-3 font-mono text-[11px] text-[var(--color-on-surface-variant)]">
+              {protocolDetailJsonSnippet(t.protocol_detail)}
+            </pre>
+          </details>
+        ) : null}
+        {protocolLines.length > 0 && t.protocol_detail !== undefined && t.protocol_detail !== null ? (
+          <details className="mt-2 rounded-lg border border-[var(--color-outline-variant)]/20 p-2">
+            <summary className="cursor-pointer text-xs font-medium text-[var(--color-outline)]">
+              View raw protocol JSON
+            </summary>
+            <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-md bg-[var(--color-surface-container-low)] p-2 font-mono text-[10px] text-[var(--color-on-surface-variant)]">
+              {protocolDetailJsonSnippet(t.protocol_detail)}
+            </pre>
+          </details>
         ) : null}
         {isolation ? (
           <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[var(--color-error)]">

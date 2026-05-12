@@ -52,6 +52,7 @@ export const CASE_API_GET_SELECT_WITH_NAME = `
           treatments_snapshot,
           model_name,
           disclaimer,
+          resolved_condition_code,
           created_at
         )
       `;
@@ -81,6 +82,7 @@ export const CASE_API_GET_SELECT_NO_NAME = `
           treatments_snapshot,
           model_name,
           disclaimer,
+          resolved_condition_code,
           created_at
         )
       `;

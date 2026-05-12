@@ -19,6 +19,7 @@ function normalizeTreatmentRow(t: TreatmentRow): TreatmentRow {
     drug_name: t.drug_name,
     generic_name: t.generic_name ?? null,
     dosage_text: t.dosage_text ?? null,
+    protocol_detail: t.protocol_detail ?? undefined,
     course_duration_text: t.course_duration_text ?? null,
     supportive_care: t.supportive_care ?? null,
     prescription_required: t.prescription_required ?? null,
@@ -144,6 +145,10 @@ function AnalysisResultInner() {
             knowledgeMatches: km,
             treatments: tr,
             modelUsed: typeof latest.model_name === "string" ? latest.model_name : null,
+            resolvedConditionCode:
+              typeof latest.resolved_condition_code === "string"
+                ? latest.resolved_condition_code
+                : null,
           });
         }
         setHydrateState("done");

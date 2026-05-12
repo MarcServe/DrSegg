@@ -51,7 +51,16 @@ function TreatmentOptionsInner() {
           caseId: effectiveCaseId,
         };
         if (!effectiveCaseId) {
-          payload.condition_code = caseState.knowledgeMatches[0]?.condition_code;
+          payload.knowledge_matches = caseState.knowledgeMatches;
+          payload.differential_diagnoses = caseState.differentialDiagnoses;
+          payload.likely_condition =
+            caseState.differentialDiagnoses[0]?.condition ??
+            caseState.possibleConditions[0] ??
+            "";
+          const code = caseState.resolvedConditionCode?.trim();
+          if (code) {
+            payload.condition_code = code;
+          }
         }
         const response = await fetch("/api/treatment", {
           method: "POST",

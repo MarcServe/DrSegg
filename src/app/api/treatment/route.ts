@@ -5,6 +5,16 @@ import {
   pickConditionCodeForTreatment,
   type KnowledgeMatchLite,
 } from "@/lib/ai/treatment-condition";
+import { summarizeClinicalIntelligenceForPrompt } from "@/lib/ai/clinical-intelligence";
+
+const CASE_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function normalizedCaseId(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t && CASE_UUID.test(t) ? t : undefined;
+}
 
 export async function POST(request: Request) {
   try {
@@ -19,12 +29,15 @@ export async function POST(request: Request) {
 
     const data = await request.json();
     const region = (data.region as string) || "Northern Highlands District";
-    let condition = (data.condition as string) || "";
-    const conditionCodeParam = (data.condition_code as string)?.trim() || null;
-    const caseId = data.caseId as string | undefined;
-    let species = (data.species as string) || "poultry";
+    let condition = typeof data.condition === "string" ? data.condition : "";
+    const conditionCodeParam =
+      typeof data.condition_code === "string" && data.condition_code.trim().length > 0
+        ? data.condition_code.trim()
+        : null;
 
-    /** When a case is loaded, resolve from latest assessment — not knowledge_matches[0] (wrong for most cases). */
+    const caseId = normalizedCaseId(data.caseId);
+    let species = typeof data.species === "string" && data.species.trim() ? data.species.trim() : "poultry";
+
     let conditionCode: string | null = null;
 
     if (caseId) {
@@ -40,40 +53,66 @@ export async function POST(request: Request) {
 
       const { data: assess } = await supabase
         .from("ai_assessments")
-        .select("knowledge_matches, likely_condition, differential_diagnoses")
+        .select("resolved_condition_code, knowledge_matches, likely_condition, differential_diagnoses")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      const persistedCode =
+        typeof assess?.resolved_condition_code === "string" ? assess.resolved_condition_code.trim() : "";
+
       const km = assess?.knowledge_matches as KnowledgeMatchLite[] | null;
       const differentials = Array.isArray(assess?.differential_diagnoses)
         ? (assess.differential_diagnoses as { condition?: string }[])
         : [];
-      conditionCode = pickConditionCodeForTreatment(km, assess?.likely_condition ?? null, differentials);
 
-      /** likely_condition is often a paragraph; match longest condition_name contained in that text (not ilike the other way). */
-      if (!conditionCode && assess?.likely_condition?.trim()) {
-        const ll = assess.likely_condition.toLowerCase();
-        const { data: nameRows } = await supabase.from("knowledge_conditions").select("condition_code, condition_name");
-        const candidates = (nameRows ?? []).filter(
-          (r) => typeof r.condition_name === "string" && r.condition_name.length >= 4 && ll.includes(r.condition_name.toLowerCase())
-        );
-        candidates.sort((a, b) => (b.condition_name?.length ?? 0) - (a.condition_name?.length ?? 0));
-        conditionCode = candidates[0]?.condition_code ?? null;
+      if (persistedCode) {
+        conditionCode = persistedCode;
+      } else {
+        conditionCode = pickConditionCodeForTreatment(km, assess?.likely_condition ?? null, differentials);
+
+        /** likely_condition may be prose; longest condition_name substring match */
+        if (!conditionCode && assess?.likely_condition?.trim()) {
+          const ll = assess.likely_condition.toLowerCase();
+          const { data: nameRows } = await supabase.from("knowledge_conditions").select("condition_code, condition_name");
+          const candidates = (nameRows ?? []).filter(
+            (r) => typeof r.condition_name === "string" && r.condition_name.length >= 4 && ll.includes(r.condition_name.toLowerCase())
+          );
+          candidates.sort((a, b) => (b.condition_name?.length ?? 0) - (a.condition_name?.length ?? 0));
+          conditionCode = candidates[0]?.condition_code ?? null;
+        }
       }
-      if (!condition && assess?.likely_condition) {
+
+      if (!condition && typeof assess?.likely_condition === "string") {
         condition = assess.likely_condition;
       }
     } else {
-      conditionCode = conditionCodeParam;
+      const kmRaw = Array.isArray(data.knowledge_matches)
+        ? (data.knowledge_matches as KnowledgeMatchLite[])
+        : [];
+      const diffRaw = Array.isArray(data.differential_diagnoses)
+        ? (data.differential_diagnoses as { condition?: string }[])
+        : [];
+      const likelyRaw =
+        typeof data.likely_condition === "string" && data.likely_condition.trim()
+          ? data.likely_condition.trim()
+          : null;
+
+      /** Prefer analyze `resolved_condition_code` when client sends it; otherwise same pick as `/api/analyze`. */
+      if (conditionCodeParam) {
+        conditionCode = conditionCodeParam;
+      } else if (kmRaw.length > 0) {
+        conditionCode = pickConditionCodeForTreatment(kmRaw, likelyRaw, diffRaw);
+      }
+
       if (!conditionCode && condition) {
         const { data: condRow } = await supabase
           .from("knowledge_conditions")
           .select("condition_code")
           .ilike("condition_name", `%${condition}%`)
           .maybeSingle();
-        conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition : null);
+        conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition.trim() : null);
       }
     }
 
@@ -83,7 +122,7 @@ export async function POST(request: Request) {
         .select("condition_code")
         .ilike("condition_name", `%${condition}%`)
         .maybeSingle();
-      conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition : null);
+      conditionCode = condRow?.condition_code ?? (condition.includes("_") ? condition.trim() : null);
     }
 
     const treatments = await fetchTreatmentsForCondition(supabase, {
@@ -93,31 +132,16 @@ export async function POST(request: Request) {
     });
 
     let resolvedConditionName: string | null = null;
+    let clinicalIntelligenceSummary: string | null = null;
     if (conditionCode) {
-      const { data: kc } = await supabase
+      const { data: kcRow } = await supabase
         .from("knowledge_conditions")
-        .select("condition_name")
+        .select("condition_name, clinical_intelligence")
         .eq("condition_code", conditionCode)
         .maybeSingle();
-      resolvedConditionName = kc?.condition_name ?? null;
-    }
-
-    if (caseId) {
-      const { data: existing } = await supabase
-        .from("cases")
-        .select("id")
-        .eq("id", caseId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (existing && treatments.length > 0) {
-        await supabase.from("treatment_plans").insert({
-          case_id: caseId,
-          region,
-          treatments,
-          dosage: { note: "Structured database rows — confirm with veterinarian" },
-        });
-      }
+      resolvedConditionName = kcRow?.condition_name ?? null;
+      clinicalIntelligenceSummary =
+        summarizeClinicalIntelligenceForPrompt(kcRow?.clinical_intelligence) || null;
     }
 
     const warnings: string[] = [];
@@ -139,6 +163,7 @@ export async function POST(request: Request) {
       warnings,
       resolved_condition_code: conditionCode,
       resolved_condition_name: resolvedConditionName,
+      clinical_intelligence_summary: clinicalIntelligenceSummary,
       message:
         treatments.length > 0
           ? `Found ${treatments.length} structured option(s) for ${resolvedConditionName || condition || "this condition"}. Availability in ${region} is noted per option.`
