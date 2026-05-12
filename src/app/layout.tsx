@@ -18,10 +18,6 @@ export const metadata: Metadata = {
   title: "Dr Segg",
   description: "Dr Morgees — farm & pet health assistant",
   applicationName: "Dr Morgees",
-  icons: {
-    icon: "/dr-morgees-logo.png",
-    apple: "/dr-morgees-logo.png",
-  },
   appleWebApp: {
     capable: true,
     title: "Dr Morgees",

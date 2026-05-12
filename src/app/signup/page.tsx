@@ -44,7 +44,7 @@ function SignupForm() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="flex justify-center">
-            <AppLogo href="/" size={240} />
+            <AppLogo href="/" size={240} emphasis />
           </div>
           <h1 className="mt-4 text-2xl font-headline font-bold text-[var(--color-on-surface)]">
             Create account

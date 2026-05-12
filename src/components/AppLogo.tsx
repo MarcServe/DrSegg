@@ -17,8 +17,11 @@ export function AppLogo({
   size = 104,
   emphasis = false,
 }: AppLogoProps) {
-  /** Softens any residual flat white in the bitmap against light/dark headers. */
-  const backgroundBlend = "mix-blend-multiply dark:mix-blend-screen";
+  /** Drop shadow keeps logos readable on pale / white backgrounds (blend modes hid light artwork). */
+  const readability =
+    emphasis
+      ? "drop-shadow-[0_2px_6px_rgba(0,0,0,0.14)] dark:drop-shadow-[0_4px_16px_rgba(0,0,0,0.45)]"
+      : "drop-shadow-[0_1px_3px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_2px_14px_rgba(0,0,0,0.35)]";
 
   const img = (
     <Image
@@ -27,9 +30,9 @@ export function AppLogo({
       width={size}
       height={size}
       placeholder="empty"
-      className={`object-contain border-0 !bg-transparent [background:none] ${backgroundBlend} ${
+      className={`object-contain border-0 !bg-transparent [background:none] ${readability} ${
         emphasis
-          ? "drop-shadow-[0_2px_12px_rgba(15,82,56,0.12)] dark:drop-shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
+          ? "ring-2 ring-[var(--color-primary)]/20 rounded-2xl ring-offset-4 ring-offset-[var(--color-background)]"
           : ""
       } ${className}`}
       style={{ color: "transparent" }}

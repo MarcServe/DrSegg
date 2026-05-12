@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "dr-morgees-pwa-install-dismissed-at";
@@ -39,6 +40,8 @@ function wasDismissedRecently(): boolean {
 }
 
 export function PwaInstallButton() {
+  const pathname = usePathname();
+  const authSurface = pathname === "/login" || pathname === "/signup";
   const [deferred, setDeferred] = useState<BeforeInstallPromptEventLike | null>(null);
   const [showFab, setShowFab] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
@@ -102,7 +105,11 @@ export function PwaInstallButton() {
 
   return (
     <>
-      <div className="fixed bottom-28 right-3 z-[60] flex flex-col items-end gap-2 pointer-events-auto pb-[env(safe-area-inset-bottom)]">
+      <div
+        className={`fixed bottom-28 z-[60] flex flex-col gap-2 pointer-events-auto pb-[env(safe-area-inset-bottom)] ${
+          authSurface ? "left-3 items-start" : "right-3 items-end"
+        }`}
+      >
         <button
           type="button"
           onClick={dismiss}
@@ -120,7 +127,11 @@ export function PwaInstallButton() {
         >
           +
         </button>
-        <span className="max-w-[10rem] text-right text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)]">
+        <span
+          className={`max-w-[10rem] text-[10px] font-bold uppercase tracking-wide text-[var(--color-on-surface-variant)] ${
+            authSurface ? "text-left" : "text-right"
+          }`}
+        >
           Add app
         </span>
       </div>
