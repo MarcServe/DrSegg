@@ -3,6 +3,7 @@ import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { CaseProvider } from "@/context/CaseContext";
 import { PwaInstallButton } from "@/components/PwaInstallButton";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -49,7 +50,9 @@ export default function RootLayout({
         className={`${inter.variable} ${manrope.variable} antialiased min-h-screen bg-[var(--color-background)] text-[var(--color-on-surface)]`}
       >
         <CaseProvider>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
           <PwaInstallButton />
         </CaseProvider>
       </body>

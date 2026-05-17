@@ -145,6 +145,21 @@ export async function runCaseAssessment(
 
   raw = normalizeLlmAssessment(raw);
 
+  // Cap LLM string arrays to prevent oversized or injected content
+  const sanitizeLlmStringArray = (arr: unknown): string[] =>
+    (Array.isArray(arr) ? arr : [])
+      .filter((item): item is string => typeof item === "string")
+      .map((s) => s.slice(0, 500))
+      .slice(0, 20);
+
+  raw.red_flags = sanitizeLlmStringArray(raw.red_flags);
+  raw.supporting_evidence = sanitizeLlmStringArray(raw.supporting_evidence);
+  raw.missing_information = sanitizeLlmStringArray(raw.missing_information);
+  raw.suggested_next_checks = sanitizeLlmStringArray(raw.suggested_next_checks);
+  if (Array.isArray(raw.possible_conditions)) {
+    raw.possible_conditions = sanitizeLlmStringArray(raw.possible_conditions);
+  }
+
   let assessment = applySafetyRules(raw, deterministic, hasImage, args.symptoms.length);
 
   const top_condition_code = pickTopConditionCode(knowledge_matches, assessment);

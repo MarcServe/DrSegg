@@ -14,8 +14,15 @@ import { CaseMonitoringBar } from "@/components/CaseMonitoringBar";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function CaseDetail({ params }: PageProps) {
   const { id } = await params;
+
+  if (!UUID_RE.test(id)) {
+    notFound();
+  }
+
   const supabase = await createClient();
 
   let { data: row, error } = await supabase

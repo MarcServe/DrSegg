@@ -6,6 +6,39 @@ import { formatFollowupsForPrompt } from "@/lib/format-followups";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// In-memory rate limiter — use Redis/Upstash in production for distributed deployments
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(userId: string, maxRequests = 10, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxRequests) return false;
+  entry.count++;
+  return true;
+}
+
+function isAllowedImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname;
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.") ||
+      host.startsWith("172.16.") ||
+      host.endsWith(".local")
+    ) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -17,10 +50,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!checkRateLimit(user.id)) {
+      return NextResponse.json({ error: "Too many requests. Please wait a minute before trying again." }, { status: 429 });
+    }
+
     const data = await request.json();
     const rawSymptoms = (data.symptoms as string[]) ?? [];
     const symptoms = rawSymptoms.map((s) => String(s).trim()).filter(Boolean);
-    const imageUrlsFromClient = (data.image_urls as string[]) ?? [];
+    const rawImageUrls = (data.image_urls as string[]) ?? [];
+    const imageUrlsFromClient = rawImageUrls.filter(isAllowedImageUrl);
     const storagePaths = (data.storage_paths as string[]) ?? [];
     const existingCaseId =
       typeof data.case_id === "string" && UUID_RE.test(data.case_id) ? data.case_id : null;
