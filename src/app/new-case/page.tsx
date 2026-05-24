@@ -34,6 +34,7 @@ function NewCaseForm() {
   const [symptomText, setSymptomText] = useState("");
   const [mediaFiles, setMediaFiles] = useState<{ file: File; kind: "image" | "video" }[]>([]);
   const [speechListening, setSpeechListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState<boolean | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const imageCaptureRef = useRef<HTMLInputElement>(null);
@@ -103,6 +104,16 @@ function NewCaseForm() {
     }, 200);
     return () => window.clearTimeout(t);
   }, [searchParams, router]);
+
+  // Detect speech recognition support once on mount (client-side only).
+  // Safari/Firefox and most mobile browsers do not support the Web Speech API.
+  useEffect(() => {
+    const w = window as unknown as {
+      SpeechRecognition?: unknown;
+      webkitSpeechRecognition?: unknown;
+    };
+    setSpeechSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
 
   const getButtonClasses = (animal: string) => {
     const isActive = caseState.animalType === animal;
@@ -264,14 +275,7 @@ function NewCaseForm() {
       };
     };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) {
-      setSymptomText((prev) =>
-        prev
-          ? prev
-          : "Voice input is not supported in this browser — type symptoms below instead."
-      );
-      return;
-    }
+    if (!Ctor) return; // button is hidden for unsupported browsers; guard is a safety net only
     const rec = new Ctor();
     rec.lang = "en-US";
     rec.continuous = false;
@@ -550,25 +554,35 @@ function NewCaseForm() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => toggleSpeech()}
-            className={`w-full flex items-center justify-center gap-4 p-8 rounded-xl active:scale-[0.98] duration-150 shadow-xl border-2 transition-colors ${
-              speechListening
-                ? "bg-[var(--color-error-container)] border-[var(--color-error)] text-[var(--color-on-error-container)]"
-                : "bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white border-transparent"
-            }`}
-          >
-            <span className="material-symbols-outlined text-4xl filled-icon">{speechListening ? "stop_circle" : "mic"}</span>
-            <div className="text-left">
-              <span className="block font-headline text-xl font-extrabold tracking-tight">
-                {speechListening ? "Stop dictation" : "Speak symptoms"}
-              </span>
-              <span className="font-body text-sm opacity-90">
-                {speechListening ? "Tap to stop" : "Uses browser speech (Chrome / Edge). Text is added above."}
-              </span>
+          {speechSupported === false ? (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)]">
+              <span className="material-symbols-outlined text-xl text-[var(--color-outline)] mt-0.5 flex-shrink-0">mic_off</span>
+              <p className="text-sm text-[var(--color-on-surface-variant)] leading-snug">
+                <span className="font-bold text-[var(--color-on-surface)]">Voice input isn&apos;t available in this browser.</span>
+                {" "}Type or paste your symptoms in the box above instead.
+              </p>
             </div>
-          </button>
+          ) : speechSupported === true ? (
+            <button
+              type="button"
+              onClick={() => toggleSpeech()}
+              className={`w-full flex items-center justify-center gap-4 p-8 rounded-xl active:scale-[0.98] duration-150 shadow-xl border-2 transition-colors ${
+                speechListening
+                  ? "bg-[var(--color-error-container)] border-[var(--color-error)] text-[var(--color-on-error-container)]"
+                  : "bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-container)] text-white border-transparent"
+              }`}
+            >
+              <span className="material-symbols-outlined text-4xl filled-icon">{speechListening ? "stop_circle" : "mic"}</span>
+              <div className="text-left">
+                <span className="block font-headline text-xl font-extrabold tracking-tight">
+                  {speechListening ? "Stop dictation" : "Speak symptoms"}
+                </span>
+                <span className="font-body text-sm opacity-90">
+                  {speechListening ? "Tap to stop" : "Tap and describe what you see. Text is added above."}
+                </span>
+              </div>
+            </button>
+          ) : null /* null = still detecting on first render — avoids flash */}
 
           {mediaFiles.length > 0 && (
             <ul className="text-sm text-[var(--color-on-surface-variant)] space-y-1">
