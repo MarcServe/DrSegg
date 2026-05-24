@@ -1,8 +1,10 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import type { KnowledgeMatch } from "@/lib/ai/schemas";
 import type { TreatmentRow } from "@/lib/ai/treatments";
+
+const SESSION_KEY = "dr_segira_case_state";
 
 export type HealthStatus = "healthy" | "mild_concern" | "likely_sick" | "critical" | null;
 
@@ -53,7 +55,7 @@ const initialState: CaseState = {
   confidence: 0,
   possibleConditions: [],
   severity: null,
-  region: "Northern Highlands District",
+  region: "Global",
   summary: null,
   needsMoreInfo: false,
   missingInformation: [],
@@ -70,10 +72,40 @@ const initialState: CaseState = {
   resolvedConditionCode: null,
 };
 
+function loadFromSession(): CaseState {
+  if (typeof window === "undefined") return initialState;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return initialState;
+    const parsed = JSON.parse(raw) as Partial<CaseState>;
+    return { ...initialState, ...parsed };
+  } catch {
+    return initialState;
+  }
+}
+
 const CaseContext = createContext<CaseContextType | undefined>(undefined);
 
 export function CaseProvider({ children }: { children: ReactNode }) {
   const [caseState, setCaseState] = useState<CaseState>(initialState);
+
+  // Rehydrate from sessionStorage on first mount (survives page refresh)
+  useEffect(() => {
+    const saved = loadFromSession();
+    if (saved.caseId || saved.animalType) {
+      setCaseState(saved);
+    }
+  }, []);
+
+  // Persist to sessionStorage on every state change
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(caseState));
+    } catch {
+      // sessionStorage unavailable (private mode quota) — silent
+    }
+  }, [caseState]);
 
   const setCaseId = useCallback((id: string) => setCaseState((prev) => ({ ...prev, caseId: id })), []);
   const setAnimalType = useCallback((type: string) => setCaseState((prev) => ({ ...prev, animalType: type })), []);
@@ -98,7 +130,12 @@ export function CaseProvider({ children }: { children: ReactNode }) {
       setCaseState((prev) => ({ ...prev, ...partial })),
     []
   );
-  const resetCase = useCallback(() => setCaseState(initialState), []);
+  const resetCase = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+    }
+    setCaseState(initialState);
+  }, []);
 
   const value = useMemo(
     () => ({

@@ -265,7 +265,11 @@ function NewCaseForm() {
     };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) {
-      alert("Voice input is not supported in this browser. Try Chrome on desktop, or type symptoms below.");
+      setSymptomText((prev) =>
+        prev
+          ? prev
+          : "Voice input is not supported in this browser — type symptoms below instead."
+      );
       return;
     }
     const rec = new Ctor();

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const region = (data.region as string) || "Northern Highlands District";
+    const region = (data.region as string) || "Global";
     let condition = typeof data.condition === "string" ? data.condition : "";
     const conditionCodeParam =
       typeof data.condition_code === "string" && data.condition_code.trim().length > 0

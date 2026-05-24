@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .maybeSingle();
 
-    const region = profile?.region ?? "Northern Highlands District";
+    const region = profile?.region ?? "Global";
 
     const visionUrls: string[] = [...imageUrlsFromClient];
     for (const p of storagePaths) {

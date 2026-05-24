@@ -56,7 +56,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     );
 
     return NextResponse.json({
-      region: profile?.region ?? "Northern Highlands District",
+      region: profile?.region ?? "Global",
       case: {
         id: row.id,
         display_name: row.display_name,

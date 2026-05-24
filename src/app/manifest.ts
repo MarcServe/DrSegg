@@ -3,9 +3,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Dr Morgees — Dr Segg",
-    short_name: "Dr Morgees",
-    description: "Farm and pet health decision support for poultry, goats, pigs, and dogs.",
+    name: "Dr Segira",
+    short_name: "Dr Segira",
+    description: "AI-powered livestock health decision support for poultry, goats, pigs, and dogs.",
     start_url: "/",
     display: "standalone",
     background_color: "#f9faf6",
